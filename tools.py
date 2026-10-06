@@ -20,6 +20,9 @@ That last line is what your loop branches on. "Returns a list" earns nothing —
 the description has to say what is *in* the list.
 """
 
+import re
+from unicodedata import category
+
 import config  # noqa: F401 — you'll use this in search_listings
 from generate import generate
 from utils.data_loader import load_listings
@@ -79,7 +82,38 @@ def search_listings(
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
     # TODO: replace this with your implementation
-    return []
+    # 1. Load every listing with load_listings().
+    listings = load_listings()
+    #         2. Filter by max_price and by size, when each is provided.
+    filtered_listings = []
+    for listing in listings:
+        if max_price is not None and listing["price"] > max_price:
+            continue
+        if size is not None and size != listing["size"]:
+            continue
+        filtered_listings.append(listing)
+
+    #         3. Score what's left by keyword overlap with `description`.
+    description_tokens = set(re.findall(r"[a-z0-9]+", description.lower()))
+    scored_listings = []
+    for listing in filtered_listings:
+        text = " ".join([
+            listing.get("title", ""),
+            listing.get("description", ""),
+            " ".join(listing.get("style_tags", [])),
+            " ".join(listing.get("colors", [])),
+            listing.get("category", ""),
+        ]).lower()
+        listing_tokens = set(re.findall(r"[a-z0-9]+", text))
+        score = len(description_tokens & listing_tokens)
+        if score > 0:
+            scored_listings.append((score, listing))
+
+    #         4. Drop anything scoring zero.
+    #         5. Sort by score, highest first, and return the listing dicts —
+    #            at most config.SEARCH_RESULT_LIMIT of them.
+    scored_listings.sort(key=lambda item: (-item[0], item[1].get("price", 0)))
+    return [listing for _, listing in scored_listings[: config.SEARCH_RESULT_LIMIT]]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
@@ -113,7 +147,35 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
     # TODO: replace this with your implementation
-    return ""
+    # 1. Check whether wardrobe['items'] is empty.
+    if not wardrobe.get("items"):
+        # 2. If it is, ask the model for general styling ideas for this item.
+        title = new_item.get("title", "the item")
+        price = new_item.get("price", "unknown")
+        category = new_item.get("category", "item")
+        prompt = (
+            f"Suggest 2-3 outfit ideas for a thrifted {title} "
+            f"({category}) priced at ${price}. "
+            "Give general styling advice that works for a casual wardrobe, "
+            "using easy-to-find basics and making the vibe clear."
+        )
+        return generate(prompt, system="You are a helpful fashion stylist.")
+
+    # 3. If it isn't, format the wardrobe items into the prompt and ask for
+    #    specific combinations naming pieces the user already owns.
+    wardrobe_items = wardrobe["items"]
+    wardrobe_text = "; ".join(
+        f"{item.get('name', 'Item')} ({item.get('category', 'category')})"
+        for item in wardrobe_items
+    )
+    title = new_item.get("title", "the item")
+    price = new_item.get("price", "unknown")
+    prompt = (
+        f"Given this wardrobe: {wardrobe_text}. "
+        f"Suggest 2 outfit combinations that pair well with the thrifted item "
+        f"'{title}' (priced at ${price}). Name the pieces the user already owns in each suggestion."
+    )
+    return generate(prompt, system="You are a helpful fashion stylist.")
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -152,5 +214,19 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    # TODO:
+    #         1. Guard against an empty or whitespace-only `outfit`.
+    if not outfit or not outfit.strip():
+        return "No outfit suggestions available."
+
+    #         2. Build a prompt with the item details and the outfit.
+    title = new_item.get("title", "the item")
+    price = new_item.get("price", "unknown")
+    platform = new_item.get("platform", "the platform")
+    prompt = (
+        f"Create a short caption for a social media post about finding {title} "
+        f"({category}) priced at ${price} on {platform}. "
+        f"The caption should be 2-4 sentences and read like a real post rather than a product description."
+    )
+    #         3. Call generate() and return the response.
+    return generate(prompt, system="You are a helpful fashion stylist.")

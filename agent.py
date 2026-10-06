@@ -13,10 +13,50 @@ Build and test your three tools in `tools.py` first. Then come here.
     python agent.py          runs both example paths below
 """
 
+import re
+
 import config
 import trace
 from tools import search_listings, suggest_outfit, create_fit_card
 from generate import ModelUnavailable
+
+
+def parse_query(query: str) -> dict:
+    """Pull out description, size, and max_price from a user query."""
+    text = query.strip()
+    if not text:
+        return {"description": "", "size": None, "max_price": None}
+
+    lower_text = text.lower()
+
+    size_match = re.search(r"(?:size|sz)\s*([a-z0-9/]+)", lower_text)
+    size = size_match.group(1).upper() if size_match else None
+
+    price_match = re.search(
+        r"(?:under|below|at most|up to|<=)\s*\$?\s*(\d+(?:\.\d+)?)",
+        lower_text,
+    )
+    max_price = float(price_match.group(1)) if price_match else None
+
+    description = lower_text
+    if size_match:
+        description = description[:size_match.start()] + description[size_match.end():]
+    if price_match:
+        description = description[:price_match.start()] + description[price_match.end():]
+
+    description = re.sub(r"\s+", " ", description)
+    description = re.sub(
+        r"\b(looking for|find me|a|an|the|for|with)\b",
+        " ",
+        description,
+    )
+    description = description.strip(" ,.-")
+
+    return {
+        "description": description,
+        "size": size,
+        "max_price": max_price,
+    }
 
 
 # ── session state ─────────────────────────────────────────────────────────────
@@ -105,10 +145,57 @@ def run_agent(query: str, wardrobe: dict) -> dict:
       • A handler for ModelUnavailable, so a bad key produces a message rather
         than a stack trace. The import is already at the top of this file.
     """
+    #  1. Start a session with new_session().
     session = new_session(query, wardrobe)
+    
+    
+    #       2. Count the times round the loop, and call trace.check_iterations(count)
+    #          on each one before you go again. It raises when the count passes
+    #          MAX_ITERATIONS in config.py — see trace.py.
+    count = 0
+    trace.check_iterations(count)
 
-    # TODO: delete these two lines and build the loop.
-    session["error"] = "The planning loop isn't built yet — see the TODO in agent.py."
+    
+    #       3. Parse the query into a description, a size, and a max_price. Regex,
+    #          string splitting, or asking the model are all fine — say which you
+    #          chose in your README. Put the result in session["parsed"].
+    session["parsed"] = parse_query(query)
+
+    #       4. Call search_listings() with what you parsed.
+    #          Put the results in session["search_results"].
+    session["search_results"] = search_listings(
+        session["parsed"]["description"],
+        session["parsed"]["size"],
+        session["parsed"]["max_price"],
+    )
+    
+    #          ⚠️ THIS IS THE BRANCH. If nothing came back:
+    #               - put a message in session["error"] saying what the user could
+    #                 change — "No results" is not that message
+    #               - return the session
+    #               - do NOT call suggest_outfit with nothing
+    if not session["search_results"]:
+        session["error"] = (
+            "No listings match that description, size, and budget. "
+            "Try a broader description or a higher max price."
+        )
+        return session
+
+    #       5. Choose an item — the first result is fine. Put it in
+    #          session["selected_item"].
+    session["selected_item"] = session["search_results"][0]
+
+    
+    #       6. Call suggest_outfit() with the selected item and the wardrobe.
+    #          Put the result in session["outfit_suggestion"].
+    session["outfit_suggestion"] = suggest_outfit(session["selected_item"], wardrobe)
+    
+    #       7. Call create_fit_card() with the outfit and the item.
+    #          Put the result in session["fit_card"].
+    session["fit_card"] = create_fit_card(session["outfit_suggestion"], session["selected_item"])
+
+    #       8. Return the session.
+
     return session
 
 
