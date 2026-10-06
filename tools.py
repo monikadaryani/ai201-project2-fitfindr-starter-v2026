@@ -217,16 +217,18 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     # TODO:
     #         1. Guard against an empty or whitespace-only `outfit`.
     if not outfit or not outfit.strip():
-        return "No outfit suggestions available."
+        return "No outfit suggestions were provided."
 
     #         2. Build a prompt with the item details and the outfit.
     title = new_item.get("title", "the item")
+    category = new_item.get("category", "item")
     price = new_item.get("price", "unknown")
     platform = new_item.get("platform", "the platform")
     prompt = (
-        f"Create a short caption for a social media post about finding {title} "
-        f"({category}) priced at ${price} on {platform}. "
-        f"The caption should be 2-4 sentences and read like a real post rather than a product description."
+        f"Create a 2-4 sentence social media caption about finding {title} "
+        f"({category}) for ${price} on {platform}. "
+        f"Use this outfit idea: {outfit}. "
+        "Make it sound like a real thrift-haul post, not a product listing, and keep the vibe specific and engaging."
     )
     #         3. Call generate() and return the response.
     return generate(prompt, system="You are a helpful fashion stylist.")

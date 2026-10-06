@@ -117,6 +117,40 @@ If `search_listings` returns an empty list, the agent stops and stores a helpful
 $ python app.py ask '...'
 
 ```
+python app.py ask 'vintage graphic tee under $30'
+
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Outfit:   Ooh, a Y2K butterfly baby tee is such a fun, nostalgic piece! Because baby tees are so fitted and cropped, the best styling rule is to balance out their proportions with looser bottoms, while playing into that 2000s aesthetic.
+
+Here are 2 stylish outfit combinations using your wardrobe, anchored by your new thrifted find:
+
+### Outfit 1: Effortless Off-Duty Model (Streetwear Vibe)
+This look plays with proportions by pairing the ultra-tight baby tee with ultra-baggy denim, leaning hard into the Y2K skater/streetwear trend.
+
+*   **The Thrifted Star:** Y2K Butterfly Baby Tee ($18.00)
+*   **Bottoms:** Baggy straight-leg jeans, dark wash
+*   **Outerwear:** Vintage black denim jacket (wear it off the shoulders or open to show off the tee)
+*   **Shoes:** Chunky white sneakers
+*   **Accessories:** Black crossbody bag
+
+**Styling Tip:** Cinch the baggy jeans with a cool belt (even if you don't need one) to break up the look, and let the white sneakers tie in any white accents from the baby tee's butterfly print.
+
+---
+
+### Outfit 2: Edgy '90s Contrast (Sweet meets Tough)
+This combination takes the sweet, feminine energy of the butterfly baby tee and toughens it up with dark hardware and structured trousers.
+
+*   **The Thrifted Star:** Y2K Butterfly Baby Tee ($18.00)
+*   **Bottoms:** Wide-leg khaki trousers
+*   **Shoes:** Black combat boots
+*   **Accessories:** Brown leather belt & Black crossbody bag
+
+**Styling Tip:** Tuck the baby tee tightly into the wide-leg khakis and define your waist with the brown leather belt. The chunky black combat boots will peek out from under the wide trousers, giving it that cool, slightly grunge contrast against the playful top.
+
+  Fit card: Scored the ultimate $18 Depop holy grail: a Y2K butterfly baby tee that’s giving total nostalgic perfection! I'm balancing out the tiny, cropped fit by styling it two ways—either paired with ultra-baggy dark denim and chunky sneakers for an off-duty model vibe, or toughened up with wide-leg khakis and combat boots. Which look are we wearing out? 🦋✨
+
+1 model calls this session, 1 served from cache, 489 prompt + 87 output tokens
 
 **The three tools, tested one at a time**
 
@@ -124,16 +158,50 @@ $ python app.py ask '...'
 $ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
 
 ```
+[{'id': 'lst_017', 'title': 'Mesh Long-Sleeve Top — Black', 'description': 'Sheer black mesh long-sleeve. Great for layering under a graphic tee or over a bralette. Stretchy material, fits true to size.', 'category': 'tops', 'style_tags': ['y2k', 'grunge', 'goth', 'layering'], 'size': 'S/M', 'condition': 'excellent', 'price': 15.0, 'colors': ['black'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_002', 'title': 'Y2K Baby Tee — Butterfly Print', 'description': 'Super cute early 2000s baby tee with butterfly graphic. Fitted crop length. Tag says medium but fits like a small.', 'category': 'tops', 'style_tags': ['y2k', 'vintage', 'graphic tee', 'cottagecore'], 'size': 'S/M', 'condition': 'excellent', 'price': 18.0, 'colors': ['white', 'pink', 'purple'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_033', 'title': 'Vintage Band Tee — Faded Grey', 'description': 'Faded grey band-style tee with distressed graphic. Crew neck. Fits boxy. Well-loved but no holes or major damage.', 'category': 'tops', 'style_tags': ['vintage', 'grunge', 'band tee', 'graphic tee', 'streetwear'], 'size': 'L', 'condition': 'fair', 'price': 19.0, 'colors': ['grey', 'charcoal'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_006', 'title': 'Graphic Tee — 2003 Tour Bootleg Style', 'description': 'Vintage-style bootleg tee with faded graphic. Slightly boxy fit. 100% cotton, soft and worn-in.', 'category': 'tops', 'style_tags': ['graphic tee', 'vintage', 'grunge', 'streetwear', 'band tee'], 'size': 'L', 'condition': 'good', 'price': 24.0, 'colors': ['black'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_015', 'title': 'Vintage Graphic Hoodie — Faded Black', 'description': 'Faded black pullover hoodie with barely-visible vintage graphic on the chest. Cozy interior. Some pilling but adds to the worn-in look.', 'category': 'tops', 'style_tags': ['vintage', 'grunge', 'graphic', 'streetwear'], 'size': 'L', 'condition': 'fair', 'price': 26.0, 'colors': ['black', 'charcoal'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_011', 'title': 'Low-Rise Cargo Pants — Khaki', 'description': 'Y2K era low-rise cargo pants. Lots of pockets. Khaki color, slightly distressed at the hems. Great for layering with a long tee.', 'category': 'bottoms', 'style_tags': ['y2k', 'cargo', '2000s', 'streetwear'], 'size': 'W29', 'condition': 'fair', 'price': 27.0, 'colors': ['khaki', 'tan'], 'brand': None, 'platform': 'poshmark'}]
 
 ```
 $ python -c "from tools import suggest_outfit; ..."
 
 ```
+python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; item = load_listings()[0]; print(suggest_outfit(item, get_example_wardrobe()))"
+
+Ooh, a vintage pair of medium-wash Levi's 501s is the ultimate wardrobe holy grail! They have that timeless, structured denim feel that goes with literally everything.
+
+Here are two effortless outfit combinations utilizing your current wardrobe to style your new $38 thrift find:
+
+### Outfit 1: Effortless Off-Duty Streetwear
+*This look plays with proportions by pairing the structured, straight-leg fit of the 501s with cozy, oversized layers for that cool-girl off-duty model aesthetic.*
+
+* **The New Addition:** Vintage Levi's 501 Jeans (Medium Wash)
+* **From Your Wardrobe:**
+  * **Tops:** Oversized grey crewneck sweatshirt
+  * **Shoes:** Chunky white sneakers
+  * **Accessories:** Black crossbody bag, Brown leather belt
+
+**Styling Tip:** Do a "French tuck" with the front of your grey crewneck into the waistband of the 501s (secured with your brown leather belt) to define your waist, while letting the back drape loosely. Finish with the chunky white sneakers and sling the black crossbody bag across your chest for an easy, everyday errand-running look.
+
+---
+
+### Outfit 2: Edgy Casual with a 90s Edge
+*This look leans into a tougher, slightly grunge-inspired vibe by layering black pieces over the classic medium-wash denim.*
+
+* **The New Addition:** Vintage Levi's 501 Jeans (Medium Wash)
+* **From Your Wardrobe:**
+  * **Tops:** White ribbed tank top
+  * **Outerwear:** Vintage black denim jacket
+  * **Shoes:** Black combat boots
+  * **Accessories:** Brown leather belt, Black crossbody bag
+
+**Styling Tip:** Tuck the white ribbed tank tightly into the jeans. Layer the vintage black denim jacket on top, but wear it off-the-shoulder or slouchy for a relaxed feel. Let the black combat boots peek out from under the hems of the 501s, and accessorize with your brown leather belt to tie the denim tones together.
 
 ```
 $ python -c "from tools import create_fit_card; ..."
 
 ```
+python -c "from tools import create_fit_card; from utils.data_loader import load_listings; item = load_listings()[0]; print(create_fit_card('a relaxed striped tee with wide-leg jeans and white sneakers', item))"
+
+Still chasing the high of scoring these vintage Levi's 501s on Depop for just $38—truly the thrift gods were smiling on me today. They have that 100% rigid cotton medium wash that only gets better with time, especially paired with a slouchy striped tee and crisp white sneakers. Excuse me while I wear this exact combo every single day until further notice.
 
 ---
 
