@@ -41,7 +41,7 @@
 
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
 
-
+The project functions like a thrift-shopping style assistant. A user searches for an item that matches specific requirements, such as a vintage graphic tee under $30, and the app parses the request, filters the listings, and finds suitable matches. It then suggests outfit combinations based on the selected item and the user’s wardrobe, and creates a fit card summarizing the look. The app is designed to avoid unrealistic requests, such as a ballgown under $5, and instead focus on practical, wearable options.
 
 ---
 
@@ -59,24 +59,24 @@
 
 ### `search_listings`
 
-- **What it does:**
-- **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Finds thrift listings that match a user’s search terms and filters them by size and price.
+- **Inputs:** `description` (str), `size` (str | None), `max_price` (float | None)
+- **Returns:** A list of matching listing dictionaries, sorted from strongest match to weakest.
+- **When it has nothing:** Returns an empty list when no listings match the query.
 
 ### `suggest_outfit`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Takes a selected item and a wardrobe, then suggests outfit combinations that go with it.
+- **Inputs:** `new_item` (dict), `wardrobe` (dict)
+- **Returns:** A non-empty string containing outfit suggestions.
+- **When it has nothing:** Returns general styling advice when the wardrobe is empty.
 
 ### `create_fit_card`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Turns an outfit suggestion and item into a short social-media style fit caption.
+- **Inputs:** `outfit` (str), `new_item` (dict)
+- **Returns:** A 2–4 sentence caption describing the look and the item.
+- **When it has nothing:** Returns a fallback message if the outfit text is empty.
 
 ---
 
@@ -94,12 +94,13 @@
      function have to be real. -->
 
 **Branch rule:**
+If `search_listings` returns an empty list, the agent stops and stores a message in `session["error"]` explaining what the user could change. Otherwise, it takes the first result and continues to `suggest_outfit()` and then `create_fit_card()`.
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** The query is parsed with a regex-based approach, with some cleanup by string splitting and text normalization.
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** `query` → `parsed` → `search_results` → `selected_item` → `outfit_suggestion` → `fit_card` → `error`
 
 ---
 
@@ -147,13 +148,13 @@ $ python -c "from tools import create_fit_card; ..."
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* <!-- search_listing branch had a general statement. -->
+- *What came back:* <!--search_listing branch had a general statement. -->
+- *What I changed:* <!-- I added the description, price, size bifurgation. -->
 
 **Moment 2**
 
-- *What I asked for:*
+- *What I asked for:* <!--challenging the readme -->
 - *What came back:*
 - *What I changed:*
 

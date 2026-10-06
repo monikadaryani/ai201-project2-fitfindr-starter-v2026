@@ -175,10 +175,35 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     #               - return the session
     #               - do NOT call suggest_outfit with nothing
     if not session["search_results"]:
-        session["error"] = (
-            "No listings match that description, size, and budget. "
-            "Try a broader description or a higher max price."
-        )
+        parsed = session["parsed"]
+        description = (parsed.get("description") or "").strip()
+        size = parsed.get("size")
+        max_price = parsed.get("max_price")
+
+        if size and max_price is not None and description:
+            session["error"] = (
+                f"No listings match that description, size, and budget. "
+                f"Try a broader description, a wider size range, or a higher max price."
+            )
+        elif size:
+            session["error"] = (
+                f"No listings match size {size}. Try a wider size range or remove the size "
+                "to broaden the search."
+            )
+        elif max_price is not None:
+            session["error"] = (
+                f"No listings fit within your budget of ${max_price:.0f}. "
+                "Try a higher max price or a broader description."
+            )
+        elif description:
+            session["error"] = (
+                f"No listings match '{description}'. Try broader keywords or a more general description."
+            )
+        else:
+            session["error"] = (
+                "No listings match your search. Try a broader description, a wider size range, "
+                "or a higher budget."
+            )
         return session
 
     #       5. Choose an item — the first result is fine. Put it in
