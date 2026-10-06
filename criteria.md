@@ -29,6 +29,8 @@ tool calls and returns a fit card — in at least 4 of 5 tries.
      "my search is a plain keyword match and some phrasings will miss" is a
      real answer. -->
 
+If some keywords are missed because we are using regex, we can expect the tool to miss occasionally.
+
 ---
 
 ## 2. An impossible query stops before the second tool
@@ -39,6 +41,7 @@ Given a query that matches no listings, the agent stops before calling
 **Why this target:**
 <!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
      about this path? -->
+We have explicitly said that if no listing is received, it should stop before `suggest_outfit`, so this path should follow that rule.
 
 ---
 
@@ -54,11 +57,10 @@ Given a query that matches no listings, the agent stops before calling
      compares session["selected_item"] against what actually reached
      suggest_outfit is the shape you're after. -->
 
-
+The found item is the same item stored in the session, passed to `suggest_outfit`, and referenced again in the fit card — in 5 of 5 tries.
 
 **Why this target:**
-
-
+A 5-of-5 target is reasonable because the same item should flow from the search result into the next tool every time. If the state is wrong, the agent can still appear to work while recommending the wrong product.
 
 ---
 
@@ -75,11 +77,10 @@ Given a query that matches no listings, the agent stops before calling
      sentence? A card longer than a caption anyone would post? Any of those can
      be turned into a number. -->
 
-
+For at least 4 out of 5 tries, the fit card names the item, includes the price or budget context, and stays within 2–4 sentences.
 
 **Why this target:**
-
-
+The model is allowed to vary its wording, so the criterion should not require identical phrasing. What matters is that the caption still communicates the item clearly and reads like a believable thrift-post caption.
 
 ---
 
@@ -92,10 +93,10 @@ Given a query that matches no listings, the agent stops before calling
      search respects a price ceiling — anything, as long as it names a number
      or an observable outcome. -->
 
-
+The selected listing respects the user’s stated size and price cap in 5 of 5 tries.
 
 **Why this target:**
-
+If the search ignores the user’s constraints, the recommendation is not useful even when the styling response sounds polished. This is a core user-value check because it decides whether the tool actually helps the user shop within their limits.
 
 
 ---

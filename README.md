@@ -59,24 +59,24 @@ The project functions like a thrift-shopping style assistant. A user searches fo
 
 ### `search_listings`
 
-- **What it does:** Finds thrift listings that match a user’s search terms and filters them by size and price.
+- **What it does:** Finds thrift listings matching a search description, then filters by size and max price and ranks the remaining items by keyword overlap.
 - **Inputs:** `description` (str), `size` (str | None), `max_price` (float | None)
-- **Returns:** A list of matching listing dictionaries, sorted from strongest match to weakest.
-- **When it has nothing:** Returns an empty list when no listings match the query.
+- **Returns:** A list of matching listing dictionaries, sorted by best keyword match first; each dict includes the listing fields from `listings.json`.
+- **When it has nothing:** Returns an empty list when no listing matches the description, size, and budget constraints.
 
 ### `suggest_outfit`
 
-- **What it does:** Takes a selected item and a wardrobe, then suggests outfit combinations that go with it.
+- **What it does:** Takes a selected listing and the user’s wardrobe and returns a short outfit recommendation based on what the user already owns.
 - **Inputs:** `new_item` (dict), `wardrobe` (dict)
-- **Returns:** A non-empty string containing outfit suggestions.
-- **When it has nothing:** Returns general styling advice when the wardrobe is empty.
+- **Returns:** A non-empty string containing 1–3 outfit suggestions.
+- **When it has nothing:** If the wardrobe is empty, it returns general styling advice instead of failing or returning an empty string.
 
 ### `create_fit_card`
 
-- **What it does:** Turns an outfit suggestion and item into a short social-media style fit caption.
+- **What it does:** Turns the outfit suggestion and the chosen item into a short fit-card caption for a thrift post.
 - **Inputs:** `outfit` (str), `new_item` (dict)
-- **Returns:** A 2–4 sentence caption describing the look and the item.
-- **When it has nothing:** Returns a fallback message if the outfit text is empty.
+- **Returns:** A 2–4 sentence caption that mentions the item, price, and platform in a natural, social-post style.
+- **When it has nothing:** If the outfit text is empty or whitespace, it returns a fallback descriptive message instead of raising an error.
 
 ---
 
@@ -94,11 +94,11 @@ The project functions like a thrift-shopping style assistant. A user searches fo
      function have to be real. -->
 
 **Branch rule:**
-If `search_listings` returns an empty list, the agent stops and stores a message in `session["error"]` explaining what the user could change. Otherwise, it takes the first result and continues to `suggest_outfit()` and then `create_fit_card()`.
+If `search_listings` returns an empty list, the agent stops and stores a helpful message in `session["error"]` explaining whether the user should broaden the description, widen the size range, or raise the price cap. Otherwise, it takes the first result and continues to `suggest_outfit()` and then `create_fit_card()`.
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** The query is parsed with a regex-based approach, with some cleanup by string splitting and text normalization.
+**How the query is parsed:** The query is parsed with a regex-based approach that extracts `description`, `size`, and `max_price`, with extra cleanup using string normalization and keyword stripping.
 
 **What moves through the session:** `query` → `parsed` → `search_results` → `selected_item` → `outfit_suggestion` → `fit_card` → `error`
 
