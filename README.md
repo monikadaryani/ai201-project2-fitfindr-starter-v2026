@@ -216,15 +216,15 @@ Still chasing the high of scoring these vintage Levi's 501s on Depop for just $3
 
 **Moment 1**
 
-- *What I asked for:* <!-- search_listing branch had a general statement. -->
-- *What came back:* <!--search_listing branch had a general statement. -->
-- *What I changed:* <!-- I added the description, price, size bifurgation. -->
+- *What I asked for:* I asked AI to help code `search_listings` and improve the no-results behavior.
+- *What came back:* It suggested a generic fallback for empty results instead of telling the user whether the issue was likely in the description, size, or price.
+- *What I changed:* I updated the no-results logic in `agent.py` so it identifies which part of the request is most likely too strict and gives the user a clearer, more actionable message.
 
 **Moment 2**
 
-- *What I asked for:* <!--challenging the readme -->
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked whether the README/spec was specific enough that someone else could build the tool from it without needing follow-up clarifying questions.
+- *What came back:* It flagged that the spec still needed precise rules for query parsing, filter logic, and how state moves between tools, especially in the empty-search and item-passing cases.
+- *What I changed:* I tightened the Planning Loop and Tool Inventory so they name the actual inputs, output shapes, and stop conditions, and I rewrote the acceptance criteria to make them measurable rather than vague.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 

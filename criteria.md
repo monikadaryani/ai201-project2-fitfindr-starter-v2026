@@ -57,10 +57,10 @@ We have explicitly said that if no listing is received, it should stop before `s
      compares session["selected_item"] against what actually reached
      suggest_outfit is the shape you're after. -->
 
-The found item is the same item stored in the session, passed to `suggest_outfit`, and referenced again in the fit card — in 5 of 5 tries.
+For 5 of 5 tries, the listing chosen by the search is the same item stored in `session["selected_item"]`, the same item passed into `suggest_outfit`, and the same item referenced in the fit card.
 
 **Why this target:**
-A 5-of-5 target is reasonable because the same item should flow from the search result into the next tool every time. If the state is wrong, the agent can still appear to work while recommending the wrong product.
+This is a direct state-check, not a vague quality judgment. If the agent changes items between tools, the system can still produce a polished response while recommending the wrong product. The test is observable and countable: the same listing identifier or title must flow through each step.
 
 ---
 
@@ -77,10 +77,10 @@ A 5-of-5 target is reasonable because the same item should flow from the search 
      sentence? A card longer than a caption anyone would post? Any of those can
      be turned into a number. -->
 
-For at least 4 out of 5 tries, the fit card names the item, includes the price or budget context, and stays within 2–4 sentences.
+For at least 4 of 5 tries, the fit card includes the item’s title or a unique listing name and the sale price, and the card remains 2–4 sentences long.
 
 **Why this target:**
-The model is allowed to vary its wording, so the criterion should not require identical phrasing. What matters is that the caption still communicates the item clearly and reads like a believable thrift-post caption.
+The model is allowed to vary its wording, so the criterion should not require identical phrasing. What matters is that the final card still contains the item identity and the numeric price, because those are the parts users need to decide whether the recommendation is worth it.
 
 ---
 
@@ -93,10 +93,10 @@ The model is allowed to vary its wording, so the criterion should not require id
      search respects a price ceiling — anything, as long as it names a number
      or an observable outcome. -->
 
-The selected listing respects the user’s stated size and price cap in 5 of 5 tries.
+When the user provides a size or a maximum price, the selected listing must match that size and cost no more than the stated limit in 5 of 5 tries. If only one constraint is provided, only that one is checked.
 
 **Why this target:**
-If the search ignores the user’s constraints, the recommendation is not useful even when the styling response sounds polished. This is a core user-value check because it decides whether the tool actually helps the user shop within their limits.
+This is a core user-value check. The tool is not useful if it writes a stylish caption for an item that ignores the user’s budget or size, even when the rest of the workflow appears successful. The rule is simple, measurable, and easy to grade without subjective interpretation.
 
 
 ---
