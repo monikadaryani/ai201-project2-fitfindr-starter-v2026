@@ -17,8 +17,10 @@ import re
 
 import config
 import trace
-from tools import search_listings, suggest_outfit, create_fit_card
+from mcp_client import call_tool
+from tools import suggest_outfit, create_fit_card
 from generate import ModelUnavailable
+from utils.data_loader import load_listings
 
 
 def parse_query(query: str) -> dict:
@@ -163,10 +165,26 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
     #       4. Call search_listings() with what you parsed.
     #          Put the results in session["search_results"].
-    session["search_results"] = search_listings(
-        session["parsed"]["description"],
-        session["parsed"]["size"],
-        session["parsed"]["max_price"],
+    #
+    #          Earlier direct-call version kept for reference:
+    #          session["search_results"] = search_listings(
+    #              session["parsed"]["description"],
+    #              session["parsed"]["size"],
+    #              session["parsed"]["max_price"],
+    #          )
+    session["search_results"] = call_tool(
+        "search_listings",
+        {
+            "description": session["parsed"]["description"],
+            "size": session["parsed"]["size"],
+            "max_price": session["parsed"]["max_price"],
+        },
+    )
+    trace.step(
+        "search_listings (via MCP)",
+        inputs=session["parsed"],
+        returned=session["search_results"],
+        note="empty result; stopping before suggest_outfit" if not session["search_results"] else "",
     )
     
     #          ⚠️ THIS IS THE BRANCH. If nothing came back:
@@ -180,7 +198,39 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         size = parsed.get("size")
         max_price = parsed.get("max_price")
 
-        if size and max_price is not None and description:
+        description_tokens = set(re.findall(r"[a-z0-9]+", description.lower()))
+        catalog_tokens = set()
+        listings = load_listings()
+        for listing in listings:
+            text = " ".join([
+                listing.get("title", ""),
+                listing.get("description", ""),
+                " ".join(listing.get("style_tags", [])),
+                " ".join(listing.get("colors", [])),
+                listing.get("category", ""),
+            ]).lower()
+            catalog_tokens |= set(re.findall(r"[a-z0-9]+", text))
+
+        description_overlap = bool(description_tokens and (description_tokens & catalog_tokens))
+
+        if size:
+            available_sizes = sorted({str(listing.get("size", "")).upper() for listing in listings if listing.get("size")})
+            normalized_size = size.upper()
+            if normalized_size not in available_sizes and not any(normalized_size in available_size for available_size in available_sizes):
+                examples = ", ".join(available_sizes[:6])
+                session["error"] = (
+                    f"No listings match size {size}. The catalog uses sizes like {examples}. "
+                    "Try a different size or remove the size to broaden the search."
+                )
+                return session
+
+        if description and description_tokens and not description_overlap:
+            session["error"] = (
+                f"No listings match the description '{description}'. "
+                "This looks more like a description mismatch than a budget problem. "
+                "Try broader keywords or a different item type."
+            )
+        elif size and max_price is not None and description:
             session["error"] = (
                 f"No listings match that description, size, and budget. "
                 f"Try a broader description, a wider size range, or a higher max price."
@@ -213,11 +263,39 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     
     #       6. Call suggest_outfit() with the selected item and the wardrobe.
     #          Put the result in session["outfit_suggestion"].
-    session["outfit_suggestion"] = suggest_outfit(session["selected_item"], wardrobe)
+    try:
+        session["outfit_suggestion"] = suggest_outfit(session["selected_item"], wardrobe)
+    except ModelUnavailable:
+        trace.step(
+            "suggest_outfit",
+            inputs={"new_item": session["selected_item"], "wardrobe": wardrobe},
+            note="model unavailable; stopping",
+        )
+        session["error"] = "The styling model is unavailable right now. Please try again later."
+        return session
+    trace.step(
+        "suggest_outfit",
+        inputs={"new_item": session["selected_item"], "wardrobe": wardrobe},
+        returned=session["outfit_suggestion"],
+    )
     
     #       7. Call create_fit_card() with the outfit and the item.
     #          Put the result in session["fit_card"].
-    session["fit_card"] = create_fit_card(session["outfit_suggestion"], session["selected_item"])
+    try:
+        session["fit_card"] = create_fit_card(session["outfit_suggestion"], session["selected_item"])
+    except ModelUnavailable:
+        trace.step(
+            "create_fit_card",
+            inputs={"outfit": session["outfit_suggestion"], "new_item": session["selected_item"]},
+            note="model unavailable; stopping",
+        )
+        session["error"] = "The fit-card model is unavailable right now. Please try again later."
+        return session
+    trace.step(
+        "create_fit_card",
+        inputs={"outfit": session["outfit_suggestion"], "new_item": session["selected_item"]},
+        returned=session["fit_card"],
+    )
 
     #       8. Return the session.
 

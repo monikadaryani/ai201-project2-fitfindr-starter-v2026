@@ -308,13 +308,66 @@ that produced it:
 **Happy path**
 
 ```
+python app.py ask 'sneakers below $40' --trace
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 1 items: Low-Top Canvas Sneakers — Off-White
+[2] suggest_outfit
+      in:  dict with keys: new_item, wardrobe
+      out: Hey there! Those off-white low-top canvas sneakers are an absolute steal for $20—they are timeless, effortless…
+[3] create_fit_card
+      in:  dict with keys: outfit, new_item
+      out: Score! 👟 snagged these off-white canvas low-tops on Poshmark for literally just $20, and I am obsessed. They’v…
+
+  Found:    Low-Top Canvas Sneakers — Off-White — $20.0 on poshmark
+
+  Outfit:   Hey there! Those off-white low-top canvas sneakers are an absolute steal for $20—they are timeless, effortlessly cool, and go with literally everything.
+
+Since those sneakers have a casual, vintage-inspired vibe, I've put together two distinct outfits using pieces straight from your wardrobe. Here is how we're styling them:
+
+### Outfit 1: Casual '90s Off-Duty
+*This look leans into a relaxed, effortless aesthetic. The baggy denim paired with the low-profile sneakers creates a classic, balanced silhouette.*
+
+* **Thrifted Addition:** Low-Top Canvas Sneakers (Off-White)
+* **Bottoms:** Baggy straight-leg jeans, dark wash
+* **Tops:** White ribbed tank top
+* **Outerwear:** Vintage black denim jacket
+* **Accessories:** Black crossbody bag
+
+**Styling Tip:** Tuck the white tank top into the dark wash jeans, add the black crossbody bag, and drape the vintage black denim jacket over your shoulders for a double-denim moment that feels modern and cool.
+
+---
+
+### Outfit 2: Elevated Streetwear Prep
+*This look mixes structured, tailored pieces with sporty, casual elements for a high-low vibe that feels very current.*
+
+* **Thrifted Addition:** Low-Top Canvas Sneakers (Off-White)
+* **Bottoms:** Wide-leg khaki trousers
+* **Tops:** Black cropped zip hoodie
+* **Accessories:** Brown leather belt, Black crossbody bag
+
+**Styling Tip:** Cinch the wide-leg khaki trousers with the brown leather belt, and wear the black cropped zip hoodie zipped up (or partially unzipped with a hint of collarbone showing). The off-white sneakers will pop against the warm khaki tones, keeping the outfit from feeling too formal.
+
+Which one are you wearing first?
+
+  Fit card: Score! 👟 snagged these off-white canvas low-tops on Poshmark for literally just $20, and I am obsessed. They’ve got that perfect vintage, beaten-in vibe that goes with literally everything in my closet—whether we're leaning into a '90s double-denim moment or keeping it sporty with wide-leg khakis. Tell me the truth: are you rocking the baggy jeans or the tailored trousers first? ✨
+
+2 model calls this session, 591 prompt + 480 output tokens
 
 ```
 
 **Empty search**
 
 ```
+python app.py ask 'blouse below $50' --trace
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+      →    empty result; stopping before suggest_outfit
 
+  No listings match the description 'blouse'. This looks more like a description mismatch than a budget problem. Try broader keywords or a different item type.
+
+0 model calls this session
 ```
 
 **On the MCP move:** <!-- what changed in your code, and whether anything
