@@ -246,16 +246,77 @@ Still chasing the high of scoring these vintage Levi's 501s on Depop for just $3
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. matching query completes | 4/5 | MET  | MET  | MET  | MET  | MET  | MET |
+| 2. impossible query stops early | 5/5 | MET  |  MET | MET  | MET  |  MET | MET |
+| empty wardrobe _(diagnostic — not one of your five)_ | 5/5 |  MET | MET  | MET  | MET  | MET  | MET |
+| 3. selected item stays consistent | 5/5 | MET  | MET  | MET  | MET  | MET  | MET |
+| 4. fit card names item and price | 4/5 |  MET |  MET |  MET | MET  |  MET | MET |
+| 5. selected item respects size and price | 5/5 | MISSED | MISSED  | MISSED  | MISSED  | MISSED  | MISSED |
 
 **Real output from one try**, pasted as text, naming the file and function
 that produced it:
 
 ```
+matching query completes  (example wardrobe)
+  query: vintage graphic tee under $30
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Vintage Band Tee — Faded Grey, Graphic Tee — 2003 Tour Bootleg Style … +7 more
+[2] suggest_outfit
+      in:  dict with keys: new_item, wardrobe
+      out: Ooh, what a fun find! A Y2K butterfly print baby tee is the ultimate nostalgic, playful piece. Because it’s fi…
+[3] create_fit_card
+      in:  dict with keys: outfit, new_item
+      out: Found this absolute gem of a Y2K butterfly baby tee on Depop for just $18, and it’s giving major early-2000s n…
+  try 1: completed — fit card 371 chars
+
+impossible query stops early  (example wardrobe)
+  query: designer ballgown size XXS under $5
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+      →    empty result; stopping before suggest_outfit
+  try 1: stopped early — No listings match size XXS. The catalog uses sizes like L, L
+empty wardrobe  (empty wardrobe)
+  query: denim jacket under $50
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 7 items: Denim Jacket — Light Wash, Cropped, High-Waisted Denim Shorts — Cutoff, Denim Vest — Medium Wash, Studded … +4 more
+[2] suggest_outfit
+      in:  dict with keys: new_item, wardrobe
+      out: Hey there! A cropped, light-wash denim jacket is one of the most versatile and high-ROI pieces you can thrift.…
+[3] create_fit_card
+      in:  dict with keys: outfit, new_item
+      out: Scored this cropped light-wash denim jacket on Poshmark for just $42, and honestly, it’s about to be the harde…
+  try 1: completed — fit card 373 chars
+
+selected item stays consistent  (example wardrobe)
+  query: denim jacket under $50
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 7 items: Denim Jacket — Light Wash, Cropped, High-Waisted Denim Shorts — Cutoff, Denim Vest — Medium Wash, Studded … +4 more
+[2] suggest_outfit
+      in:  dict with keys: new_item, wardrobe
+      out: Hey there! That light wash, cropped thrifted denim jacket is an absolute gem. A lighter wash provides a cool c…
+[3] create_fit_card
+      in:  dict with keys: outfit, new_item
+      out: Scored this vintage light-wash cropped denim jacket on Poshmark for just $42, and it is officially my new favo…
+  try 1: completed — fit card 442 chars
+
+fit card names item and price  (example wardrobe)
+  query: vintage graphic tee under $30
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Vintage Band Tee — Faded Grey, Graphic Tee — 2003 Tour Bootleg Style … +7 more
+  [rate limit] 15 requests used this minute. Waiting 32s. This is normal.
+[2] suggest_outfit
+      in:  dict with keys: new_item, wardrobe
+      out: Ooh, a Y2K butterfly baby tee is such a fun piece! Since baby tees are fitted and cropped, they create a fanta…
+[3] create_fit_card
+      in:  dict with keys: outfit, new_item
+      out: Scored this Y2K butterfly baby tee on Depop for just $18, and I am officially obsessed! It creates the dreamie…
+  try 1: completed — fit card 389 chars
+
 
 ```
 
