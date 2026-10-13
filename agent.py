@@ -61,6 +61,49 @@ def parse_query(query: str) -> dict:
     }
 
 
+def validate_selected_item(session: dict) -> bool:
+    """Ensure the selected item is still valid against the user's active constraints."""
+    item = session.get("selected_item")
+    if item is None:
+        return False
+
+    parsed = session.get("parsed", {})
+    user_size = parsed.get("size")
+    if user_size is not None:
+        item_size = str(item.get("size", "")).upper()
+        normalized_user_size = user_size.upper()
+        if not item_size:
+            session["error"] = (
+                f"The selected item is missing a size, so it cannot satisfy your request for size {user_size}. "
+                "Try a different item or remove the size constraint."
+            )
+            return False
+        if normalized_user_size not in item_size and item_size not in normalized_user_size:
+            session["error"] = (
+                f"The selected item is size {item_size}, which does not match your requested size {user_size}. "
+                "Try a different item or remove the size constraint."
+            )
+            return False
+
+    max_price = parsed.get("max_price")
+    if max_price is not None:
+        item_price = item.get("price")
+        if item_price is None:
+            session["error"] = (
+                f"The selected item is missing a price, so it cannot satisfy your budget of ${max_price:.0f}. "
+                "Try a different item or raise the price cap."
+            )
+            return False
+        if float(item_price) > float(max_price):
+            session["error"] = (
+                f"The selected item costs ${item_price:.2f}, which is above your max price of ${max_price:.2f}. "
+                "Try a different item or raise the price cap."
+            )
+            return False
+
+    return True
+
+
 # ── session state ─────────────────────────────────────────────────────────────
 
 def new_session(query: str, wardrobe: dict) -> dict:
@@ -260,7 +303,12 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     #          session["selected_item"].
     session["selected_item"] = session["search_results"][0]
 
-    
+    #       5b. Re-check the chosen item against any user constraints before
+    #            continuing. If the item cannot be verified, stop here and do
+    #            not call suggest_outfit.
+    if not validate_selected_item(session):
+        return session
+
     #       6. Call suggest_outfit() with the selected item and the wardrobe.
     #          Put the result in session["outfit_suggestion"].
     try:

@@ -38,6 +38,13 @@ If some keywords are missed because we are using regex, we can expect the tool t
 Given a query that matches no listings, the agent stops before calling
 `suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
 
+**Updated criterion**
+Given a query that matches no listings, the agent stops before calling
+`suggest_outfit` and returns a message naming what to change — 4 of 5 tries.
+
+**Why updated**
+A stronger challenge is that stopping early is only half the requirement. The system must also identify why the request is impossible and explain it correctly. If the diagnosis is vague or cannot reliably separate description, size, or price issues, then the system is not fully meeting the criterion even if it does stop before suggesting an outfit. On that interpretation, the stop condition is present, but the explanation logic is not consistently strong enough to earn a full pass on all 5. 
+
 **Why this target:**
 <!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
      about this path? -->
@@ -80,7 +87,7 @@ This is a direct state-check, not a vague quality judgment. If the agent changes
 For at least 4 of 5 tries, the fit card includes the item’s title or a unique listing name and the sale price, and the card remains 2–4 sentences long.
 
 **Why this target:**
-The model is allowed to vary its wording, so the criterion should not require identical phrasing. What matters is that the final card still contains the item identity and the numeric price, because those are the parts users need to decide whether the recommendation is worth it.
+The model is allowed to vary its wording, so the criterion should not require identical phrasing. What matters is that the final card still contains the item identity and the numeric price, because those are the parts users need to decide whether the recommendation is worth it. If the model or the listing drops the item name or price, the card may still fail the criterion in a real scenario.
 
 ---
 

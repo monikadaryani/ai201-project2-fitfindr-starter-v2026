@@ -207,6 +207,7 @@ Still chasing the high of scoring these vintage Levi's 501s on Depop for just $3
 
 ## How I Used AI
 
+
 <!-- Two specific moments. What you asked, what came back, what you changed.
 
      "I used Claude to help me code" is not enough.
@@ -230,6 +231,12 @@ Still chasing the high of scoring these vintage Levi's 501s on Depop for just $3
 
      Don't fill these in during unit 3.
      ═══════════════════════════════════════════════════════════════════ -->
+
+**Moment 3**
+
+- *What I asked for:* I asked AI to argue the opposite verdict on the project criteria so I could test whether my own judgments were too strict or whether the rubric itself was too ambiguous.
+- *What came back:* It argued that the project should be judged by behavior under imperfect data rather than by perfect catalog metadata, and that stopping on unverifiable size or price is a form of respecting the user’s constraints.
+- *What I changed:* I kept the rubric as written but clarified the logic in my diagnosis: the system is not necessarily failing when it refuses to continue with an unverifiable match, because that is a conservative and safer interpretation of size and price compliance.
 
 ---
 
@@ -342,13 +349,24 @@ fit card names item and price  (example wardrobe)
 
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
+| 1 | matching query completes | 4/5 | MET | For all the matching listing, the agent completes all three tool calls and returns a fit card — in 5 of 5 tries. |
+| 2 | impossible query stops early | 5/5 | MET | For all impossible queries, the agent stops early and names what needs to be changed if possible. |
+| 3 | selected item stays consistent | 5/5 | MET | The selected item stays consistent across all function calls |
+| 4 | fit card names item and price | 4/5 | MET | The fit card names the price if available and the item. |
+| 5 | selected item respects size and price | 5/5 | MISSED | The searched item in all the tries didn't have the size, so it isn't possible to verify the size constraint |
 
 **Diagnoses**
+
+1. For criterion 5, the selected item often lacked a verifiable size or price. The wording was also ambiguous because it did not say what should happen when a listing omits one of those fields.
+
+This miss happened at the loop/tool boundary. The search tool returned a candidate that did not meet the user’s stated size or price constraints, and the loop continued without re-checking the selected item before moving on. The mechanism was missing constraint enforcement after selection.
+
+The fix is to enforce the constraint after selection or to search again with a stricter filter and return a clear message when the listing does not include a verifiable size or price.
+
+2. For criterion 2, it worked on the main run file, but additional queries showed that it cannot always identify the root cause. When it cannot confidently classify the empty result as a description, size, or budget issue, it falls back to a generic message instead of naming the specific fix.
+
+This miss is in the diagnostic branch, not in the stop condition. The agent does stop before suggest_outfit, but the explanation logic is sometimes too weak to tell whether the issue is description, size, or price.
+
 
 
 
@@ -448,23 +466,26 @@ full. -->
      `python run_eval.py --label after` -->
 
 **What I changed:**
+I added a second validation step in `agent.py` after selecting the first search result. The agent now checks whether the chosen listing still satisfies the user’s requested size and maximum price before it continues to `suggest_outfit()`. If the item is missing a size or price, the size is wrong, or the price is over budget, it stops and stores a precise `session["error"]` message instead of styling an invalid item.
 
 **Which failure it was meant to fix:**
+This was meant to fix the loop continuing after a candidate item failed the user’s original constraints, especially when the listing omitted size/price information or the item exceeded the requested budget. The bug was not only in the empty-search branch; it was also in the post-selection logic that never re-validated the chosen item.
+
+This fix is in place, but I have not yet proven it on a real non-empty selected-item case, because the current catalog filters size and price before selection and most failing examples terminate earlier with an empty-search branch.
 
 ### Run Log — After
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. matching query completes | 4/5 | MET | MET | MET | MET | MET | MET |
+| 2. impossible query stops early | 5/5 | MET | MET | MET | MET | MET | MET |
+| 3. selected item stays consistent | 5/5 | MET | MET | MET | MET | MET | MET |
+| 4. fit card names item and price | 4/5 | MET | MET | MET | MET | MET | MET |
+| 5. selected item respects size and price | 5/5 | MISSED | MISSED | MISSED | MISSED | MISSED | MISSED |
 
 **Did it help, and how do I know:**
 
-<!-- If it made things worse, say that. Honestly reported, that earns full
-     credit and is more interesting than one that worked. -->
+The new guard is active and prevents the loop from continuing when the chosen item is missing or invalid on size/price. I can confirm the code path exists and returns a clear `session["error"]` when it is triggered, but I cannot honestly mark criterion 5 as MET yet because the current catalog still reaches the stop condition earlier through empty-search results more often than through a non-empty selected-item failure. In other words, the fix is present, but the proof case for a real selected-item violation is still missing.
 
 
 
