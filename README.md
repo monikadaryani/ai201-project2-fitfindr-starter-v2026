@@ -449,12 +449,8 @@ python app.py ask 'blouse below $50' --trace
 0 model calls this session
 ```
 
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
-
-
+**On the MCP move:**
+I rewired the branch in `run_agent()` from the direct `search_listings()` call to `mcp_client.call_tool("search_listings", {...})` and kept the same session flow afterwards. The call shape changed from a direct Python function invocation to an MCP tool payload, but the returned value still had to be the list of matching listings and the empty-list handling had to remain the same. The happy path still completed normally, and the empty-search branch still stopped before `suggest_outfit()`. The behavior did not change materially after the rewire; the important difference was that the tool call now passed through the MCP transport instead of a direct in-process function call.
 
 ---
 
@@ -492,6 +488,10 @@ The new guard is active and prevents the loop from continuing when the chosen it
 ---
 
 ## What's Still Broken
+
+Criterion 5 is still the main unresolved issue. The guard is now in place in `agent.py`, but I have not yet proven it on a real non-empty selected-item case. In this dataset, most size or budget failures never reach the selection step because the earlier empty-search branch stops first. That means the app is safer than before, but it still needs a direct proof case: a listing that survives the search layer, is chosen as the item, and then fails the user’s size or price constraints before styling begins.
+
+The next thing I would do is create or find a test case where the result list is non-empty but the selected item is still invalid. For example, a query with a size constraint where the catalog contains a candidate with a mismatched or missing size field, or a budget query where the chosen item is priced above the cap. The fix would be to run that exact case through `run_agent()` and confirm the session stops with a clear error and no outfit or fit card is generated.
 
 <!-- For each criterion still missed: what you'd do, and why you stopped where
      you did. "I ran out of time" is fine if it's true. Pretending nothing is
