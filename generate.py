@@ -344,3 +344,74 @@ def generate(
         f"Still rate limited after {config.MAX_RETRIES} attempts. Wait a "
         f"minute and try again — your key is fine.\nLast error: {last_error}"
     )
+
+
+# ─── Embeddings (capstone: semantic search) ──────────────────────────────────
+
+
+def embed(texts: list[str], task_type: str) -> list[list[float]]:
+    """
+    Turn texts into embedding vectors, one per text, in the same order.
+
+    Args:
+        texts:     the strings to embed. One API call embeds all of them.
+        task_type: "RETRIEVAL_DOCUMENT" for listings, "RETRIEVAL_QUERY" for
+                   what the user typed. The model embeds the two sides of a
+                   search differently, and mixing them up lowers match quality.
+
+    Goes through the same pacing, budget and retry rules as generate(). Not
+    cached here — semantic.py caches the listing vectors itself, and a query
+    vector should be a real call so cost measurements are real.
+    """
+    global _session_calls
+
+    _check_budget()
+
+    last_error: Exception | None = None
+    for attempt in range(config.MAX_RETRIES):
+        _wait_for_slot()
+        try:
+            client = _get_client()
+            _call_times.append(time.monotonic())
+            _session_calls += 1
+            response = client.models.embed_content(
+                model=config.EMBEDDING_MODEL,
+                contents=texts,
+                config={
+                    "task_type": task_type,
+                    "output_dimensionality": config.EMBEDDING_DIMENSIONS,
+                },
+            )
+            vectors = [list(e.values or []) for e in (response.embeddings or [])]
+            if len(vectors) != len(texts) or not all(vectors):
+                raise ModelUnavailable(
+                    f"The embedding model returned {len(vectors)} vectors for "
+                    f"{len(texts)} texts."
+                )
+            return vectors
+
+        except ModelUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001 — surfaced below
+            last_error = exc
+            message = str(exc).lower()
+            rate_limited = (
+                "429" in message
+                or "resource" in message and "exhaust" in message
+                or "rate" in message and "limit" in message
+            )
+            if not rate_limited:
+                raise ModelUnavailable(_explain(exc)) from exc
+            backoff = _retry_delay(exc, attempt)
+            print(
+                f"  [rate limit] embedding service pushed back. Waiting "
+                f"{backoff:.0f}s (attempt {attempt + 1} of {config.MAX_RETRIES}).",
+                file=sys.stderr,
+                flush=True,
+            )
+            time.sleep(backoff)
+
+    raise RuntimeError(
+        f"Still rate limited after {config.MAX_RETRIES} attempts. Wait a "
+        f"minute and try again — your key is fine.\nLast error: {last_error}"
+    )

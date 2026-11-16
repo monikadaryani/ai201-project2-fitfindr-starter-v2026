@@ -62,6 +62,31 @@ MAX_ITERATIONS = 10
 SEARCH_RESULT_LIMIT = 10
 
 
+# ─── Search strategy (capstone) ──────────────────────────────────────────────
+
+# Which retrieval strategy search_listings uses:
+#   "keyword"  — word overlap between the query and the listing text (unit 3)
+#   "semantic" — embedding similarity between the query and the listing text
+# The agent passes this to the MCP tool as an argument, because the MCP server
+# runs in a separate process that does not inherit your shell's environment.
+#     AI201_SEARCH=semantic python app.py ask 'band shirt under $25'
+SEARCH_STRATEGY = os.getenv("AI201_SEARCH", "keyword")
+
+# The embedding model and vector size for semantic search. Listing vectors are
+# computed once and cached in .cache/; changing either setting recomputes them.
+EMBEDDING_MODEL = os.getenv("AI201_EMBEDDING_MODEL", "gemini-embedding-001")
+EMBEDDING_DIMENSIONS = 768
+
+# Semantic search scores every listing, so it never comes back empty on its
+# own. Listings scoring below this cosine similarity are dropped, so an
+# impossible query still returns [] and the agent's stop branch still fires.
+SEMANTIC_MIN_SCORE = 0.62
+# Chosen from six sanity queries (none from scenarios.py): good matches topped
+# out at 0.68–0.69, unrelated queries ("laptop charger", "car tires") at
+# 0.53–0.54, and "wedding dress" reached 0.605 on a slip dress. 0.62 sits in
+# that gap. It is narrow (~0.06), so treat the value as a known weak point.
+
+
 # ─── Model ───────────────────────────────────────────────────────────────────
 
 MODEL = os.getenv("AI201_MODEL", "gemini-3.5-flash-lite")

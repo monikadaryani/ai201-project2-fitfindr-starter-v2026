@@ -123,6 +123,7 @@ def new_session(query: str, wardrobe: dict) -> dict:
     return {
         "query": query,              # what the user typed
         "parsed": {},                # description / size / max_price you pulled out of it
+        "search_strategy": config.SEARCH_STRATEGY,  # "keyword" or "semantic" (capstone)
         "search_results": [],        # everything search_listings returned
         "selected_item": None,       # the one you chose — goes into suggest_outfit
         "wardrobe": wardrobe,        # the user's wardrobe
@@ -221,6 +222,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             "description": session["parsed"]["description"],
             "size": session["parsed"]["size"],
             "max_price": session["parsed"]["max_price"],
+            "strategy": session["search_strategy"],
         },
     )
     trace.step(

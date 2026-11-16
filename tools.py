@@ -25,6 +25,7 @@ from unicodedata import category
 
 import config  # noqa: F401 — you'll use this in search_listings
 from generate import generate
+import semantic
 from utils.data_loader import load_listings
 
 
@@ -34,6 +35,7 @@ def search_listings(
     description: str,
     size: str | None = None,
     max_price: float | None = None,
+    strategy: str = "keyword",
 ) -> list[dict]:
     """
     Search the listings data for items matching a description, and optionally a
@@ -56,6 +58,10 @@ def search_listings(
                      What counts as a size match is part of your spec — decide
                      it and write it into your Tool Inventory.
         max_price:   maximum price, inclusive, or None to skip price filtering.
+        strategy:    "keyword" (word overlap, unit 3) or "semantic" (embedding
+                     similarity, capstone). Both apply the same size and price
+                     filters; only the ranking differs. Semantic drops anything
+                     below config.SEMANTIC_MIN_SCORE, so it can still return [].
 
     Returns:
         A list of matching listing dicts, best match first.
@@ -92,6 +98,13 @@ def search_listings(
         if size is not None and size != listing["size"]:
             continue
         filtered_listings.append(listing)
+
+    if strategy == "semantic":
+        scored = semantic.rank(description, filtered_listings)
+        kept = [listing for score, listing in scored if score >= config.SEMANTIC_MIN_SCORE]
+        return kept[: config.SEARCH_RESULT_LIMIT]
+    if strategy != "keyword":
+        raise ValueError(f"Unknown search strategy {strategy!r}; use 'keyword' or 'semantic'.")
 
     #         3. Score what's left by keyword overlap with `description`.
     description_tokens = set(re.findall(r"[a-z0-9]+", description.lower()))

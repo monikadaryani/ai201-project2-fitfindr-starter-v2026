@@ -74,6 +74,7 @@ def search_listings(
     description: str,
     size: str | None = None,
     max_price: float | None = None,
+    strategy: str = "keyword",
 ) -> list[dict]:
     """
     Search thrift listings by description, with optional size and maximum price filters.
@@ -83,6 +84,10 @@ def search_listings(
         size: Optional size filter. When provided, the returned item must match that size.
         max_price: Optional maximum price in dollars. When provided, returned items must cost
             no more than this value.
+        strategy: How results are ranked. "keyword" (default) matches words shared
+            between the description and the listing. "semantic" matches on meaning
+            using text embeddings, and drops listings below a minimum similarity.
+            Size and max_price filters apply the same way under both.
 
     Returns:
         A list of matching listing dictionaries ranked best match first. If no listing
@@ -90,7 +95,7 @@ def search_listings(
         title, description, category, style_tags, size, condition, price, colors, brand,
         and platform.
     """
-    return _search_listings_impl(description, size, max_price)
+    return _search_listings_impl(description, size, max_price, strategy)
 
 # ──────────────────────────────────────────────────────────────────────────────
 #
