@@ -536,3 +536,38 @@ The next thing I would do is create or find a test case where the result list is
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+
+---
+
+---
+
+## Capstone
+
+**The System**
+
+FitFindr, the thrift-shopping agent from units 3 and 4: parse the query → `search_listings` (over MCP) → `suggest_outfit` → `create_fit_card`. I picked it because I know where it's weak. Its search is a literal keyword match, and in unit 4 I saw that weakness show up directly in the results.
+
+**The Shape**
+
+Shape C: extend one capability. I'm adding **semantic search** as a second retrieval strategy next to the existing keyword search in `search_listings` (`tools.py`). Keyword search only finds a listing that shares exact words with the query, so "band shirt" can miss a listing written as "graphic tee". Semantic search embeds the query and the 40 listings with a Gemini embedding model and ranks by similarity, so it can match on meaning. Listing embeddings are computed once and cached to disk. Size and price filters work exactly as before. A minimum similarity score makes an impossible query still return an empty list, so the existing stop-before-`suggest_outfit` branch keeps working. A setting in `config.py` picks the strategy, so I can run the same scenarios through both and compare. Alongside it, as every shape requires: one structured JSON log line per request, a measured cost per run for each strategy, and a Path B run path (one documented command, run locally, with a committed log).
+
+**Out of Scope**
+
+- **Blending keyword and semantic scores into one hybrid ranking.** It's tempting, but it would add weights to tune and make it impossible to say which strategy produced a result. Comparing the two cleanly is the evidence this shape needs.
+- **Improving the "no match" message from unit 4's criterion 2** (`agent.py`, lines 244–255). When it can't tell whether the description, size or price caused the miss, it falls back to a generic line. I'm not fixing that, and I'm not rewriting it to use embeddings either. It stays keyword-based. Either change would be a second capability.
+- **Fixing criterion 5 from unit 4** (the selected item must match the requested size and price). It's a bug in the existing size filter, not part of the new capability, so it stays listed under What's Still Broken above.
+- **Hosting it (Path A) or adding a UI.** It runs locally under Path B and is used through `POST /ask`. A host signup and a frontend would take time away from testing and add nothing the brief scores.
+
+No stretch goals this unit.
+
+**Size Check**
+
+About 90 minutes of building, estimated:
+
+- Embedding the listings and caching them: ~20 min
+- Query embedding, similarity ranking and the minimum score: ~25 min
+- The `config.py` setting, wired through the MCP search call: ~15 min
+- The JSON log line in `serve.py`: ~20 min
+- The `RUNNING.md` command: ~10 min
+
+The riskiest part is choosing the minimum score. If it runs long, I'll pick one value from a handful of known-good and known-impossible queries and record that choice, rather than tuning it further.
