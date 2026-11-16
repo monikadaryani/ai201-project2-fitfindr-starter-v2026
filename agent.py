@@ -17,7 +17,7 @@ import re
 
 import config
 import trace
-from mcp_client import call_tool
+from mcp_client import MCPError, call_tool
 from tools import suggest_outfit, create_fit_card
 from generate import ModelUnavailable
 from utils.data_loader import load_listings
@@ -216,15 +216,33 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     #              session["parsed"]["size"],
     #              session["parsed"]["max_price"],
     #          )
-    session["search_results"] = call_tool(
-        "search_listings",
-        {
-            "description": session["parsed"]["description"],
-            "size": session["parsed"]["size"],
-            "max_price": session["parsed"]["max_price"],
-            "strategy": session["search_strategy"],
-        },
-    )
+    # Capstone: semantic search calls the embedding model inside the MCP
+    # server, so a model outage now surfaces here as an MCPError. Stop with a
+    # message instead of a stack trace, the same way the two model tools below
+    # handle ModelUnavailable. (Falling back to keyword search wouldn't help:
+    # suggest_outfit needs the same model a step later.)
+    try:
+        session["search_results"] = call_tool(
+            "search_listings",
+            {
+                "description": session["parsed"]["description"],
+                "size": session["parsed"]["size"],
+                "max_price": session["parsed"]["max_price"],
+                "strategy": session["search_strategy"],
+            },
+        )
+    except MCPError as exc:
+        detail = str(exc).strip().splitlines()[0] if str(exc).strip() else "unknown error"
+        trace.step(
+            "search_listings (via MCP)",
+            inputs=session["parsed"],
+            note="search failed; stopping before suggest_outfit",
+        )
+        session["error"] = (
+            "Search is unavailable right now, so no item was picked. "
+            f"Please try again later. (Detail: {detail})"
+        )
+        return session
     trace.step(
         "search_listings (via MCP)",
         inputs=session["parsed"],

@@ -139,3 +139,72 @@ This is a core user-value check. The tool is not useful if it writes a stylish c
      A number you missed stays where it is, gets diagnosed, and gets a fix
      attempted. That's where the points are.
      ───────────────────────────────────────────────────────────────────────── -->
+
+---
+
+# Capstone criteria — semantic search
+
+Written 2026-11-16, after building semantic search and before running any trials. The five criteria above are from units 3 and 4 and are left as they were.
+
+The queries below are new. None of them were used in the smoke test or to pick `SEMANTIC_MIN_SCORE` (0.62). Those queries were "band shirt", "jean jacket", "something cozy for winter", "wedding dress", "laptop charger" and "car tires". Testing on them would only show that the cutoff fits the queries it was picked from.
+
+Every criterion is run **3 trials**. Criteria 1–3 are about the extension; 4 and 5 are about what it costs to run.
+
+---
+
+## 1. Semantic search finds paraphrased items
+
+Five queries, each worded differently from the one listing it should find:
+
+| Query | Intended listing |
+|---|---|
+| leather motorcycle coat | lst_022 — 90s Leather Bomber |
+| flowery summer frock | lst_013 — 90s Silk Slip Dress |
+| ankle booties | lst_028 — Suede Chelsea Boots |
+| chunky wool sweater | lst_008 — Knit Cardigan |
+| gym shorts | lst_026 — Biker Shorts |
+
+With `AI201_SEARCH=semantic`, the selected item is the intended listing for **at least 4 of 5 queries, in each of 3 trials**. On the same queries, semantic search must also get **more** intended listings than keyword search does.
+
+**Why this target:**
+This is the claim the capability exists for. If semantic search can't beat literal word matching on paraphrases, the extension adds cost and nothing else. It's 4 of 5 and not 5 of 5 because several queries have a close second. "Gym shorts" also fits the Denim Shorts, and "ankle booties" sits near the Platform Mary Janes. The model can rank a reasonable neighbour first without being broken. Comparing against keyword on the same queries keeps the target honest: if keyword also gets 4 of 5, the extension hasn't shown anything.
+
+---
+
+## 2. Impossible queries still stop before `suggest_outfit`
+
+Five queries for things the catalog doesn't carry: **bikini swimsuit, black tuxedo, stiletto heels, winter gloves, pearl necklace**.
+
+With `AI201_SEARCH=semantic`, the search returns an empty list and the agent stops before calling `suggest_outfit` (`outfit_suggestion` and `fit_card` stay `None`, `error` is set). That must happen for **5 of 5 queries, in each of 3 trials**.
+
+**Why this target:**
+Keyword search could return nothing on its own. Semantic search never does, because every listing has some similarity to every query. The stop branch now depends entirely on `SEMANTIC_MIN_SCORE`. A styled outfit for an item the user didn't ask for is the worst thing this agent can do, so the target is 5 of 5. These queries are chosen to sit close to real items (a tuxedo near the Velvet Blazer, stilettos near the Platform Mary Janes), and the gap that 0.62 sits in was only about 0.06 wide. So I expect this to be hard to meet.
+
+---
+
+## 3. Queries that already worked still work
+
+The two matching queries from unit 4's scenarios: **"vintage graphic tee under $30"** and **"denim jacket under $50"**.
+
+With `AI201_SEARCH=semantic`, each one completes all three tools and returns a fit card. The selected item is in the same `category` as the item keyword search selects for that query. That must happen for **both queries, in each of 3 trials (6 of 6)**.
+
+**Why this target:**
+A new search strategy that breaks what used to work isn't an extension, it's a trade. These two queries passed under keyword search in unit 4, so any failure here is caused by the change. The target is 6 of 6 because these are easy queries that share words with the listings. The only way they fail is if the minimum score drops a correct match, which is exactly the side effect to catch. Category, not the exact listing, because semantic may reasonably pick a different graphic tee than keyword did.
+
+---
+
+## 4. Semantic search adds one API call and almost no tokens
+
+With the response cache off and the listing embeddings already cached, a semantic run makes **exactly 1 more API call** than a keyword run of the same query: the query embedding. It also uses **no more than 20 more input tokens**. This must hold in **3 of 3 trials** on "vintage graphic tee under $30". I'll also report the cost of one run of each strategy in dollars, from the measured tokens.
+
+**Why this target:**
+The listing vectors are supposed to be embedded once and reused. If a run makes more than one extra call, the listing cache isn't working, and every request is quietly paying to re-embed the 40 listings. That's the failure this criterion is for. 20 tokens is generous for a short shopping query, so missing it means something other than the query is being embedded.
+
+---
+
+## 5. The search step stays fast when warm
+
+On a **warm** run (with `.cache/listing_embeddings.json` already present, so the 40 listings don't need embedding), the search step takes **under 2.0 seconds in at least 14 of 15 trials**. The search step is the MCP `search_listings` call, including the query embedding. This is measured for all 5 queries from criterion 1, in 3 trials each (15 trials), and the time is taken from the structured log.
+
+**Why this target:**
+The search step, not the whole run, because the two model calls that write the outfit and the fit card vary by seconds between runs. That noise would hide any difference search makes. Warm, because a cold run (no `.cache/listing_embeddings.json`) first embeds all 40 listings, which is a one-time setup cost, not a per-request cost. Each MCP call starts a new Python process, so nothing stays in memory between runs. The saved file is the only thing that makes a run warm. 2 seconds allows for the MCP server starting a new Python process (which keyword search pays too) plus one embedding round trip. 14 of 15, not the median, because a median can hide a search that is slow often. One slow trial in 15 can be network noise outside the system, such as a single slow round trip to the embedding service. Two or more would be a pattern worth diagnosing, for example rate-limit retries: `generate.embed()` waits at least 2 s before retrying, and each MCP call is a fresh process, so local pacing resets every time.
