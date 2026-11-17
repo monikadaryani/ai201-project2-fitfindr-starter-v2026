@@ -571,3 +571,142 @@ About 90 minutes of building, estimated:
 - The `RUNNING.md` command: ~10 min
 
 The riskiest part is choosing the minimum score. If it runs long, I'll pick one value from a handful of known-good and known-impossible queries and record that choice, rather than tuning it further.
+
+
+**Run Path**
+
+Path B, local with logs. One command starts it, `AI201_SEARCH=semantic python serve.py`. The environment it needs and how to call it are in [RUNNING.md](RUNNING.md) under "Capstone run path". I tested those instructions on a fresh clone of this repo in a new folder. The only failure was the placeholder API key in `.env`, which the instructions tell you to replace. The test also caught that the first semantic search made 40 separate token-counting calls, which I batched into one before any trials.
+
+**Instrumentation**
+
+Every run writes one JSON line to `logs/runs.jsonl` through `runlog.py::logged_run`, from the CLI (`app.py ask`), the HTTP server (`serve.py` `/ask`) and the trial runner (`capstone_eval.py::run`). The record is written in a `finally` block, so runs that stop early, crash or are rejected (a 400 from `/ask`) are logged too. The fields are documented at the top of `runlog.py`. The ones specific to this extension are `strategy`, `search_ms` (the MCP search call alone), `embed_calls`, `embed_tokens` and `count_ms`. The embedding happens inside the MCP server process, which the agent's own counters can't see, so `mcp_server.py` writes each search's embedding usage to `.cache/last_search_usage.json` and `agent.py::run_agent` reads it back.
+
+Twelve real entries from `logs/runs.jsonl`, unedited except that `fit_card` is cut to 70 characters to keep lines readable:
+
+```jsonl
+{"ts": "2026-11-17T06:40:03.406+00:00", "run_id": "61689b8c", "source": "eval", "outcome": "fit_card", "query": "leather motorcycle coat", "strategy": "semantic", "parsed": {"description": "leather motorcycle coat", "size": null, "max_price": null}, "n_results": 1, "selected_id": "lst_022", "selected_title": "90s Leather Bomber — Black", "selected_price": 75.0, "error": null, "fit_card": "Still pinching myself over finding this butter-soft 90s leather bomber…", "duration_ms": 23354, "search_ms": 1242, "model_calls": 2, "prompt_tokens": 756, "output_tokens": 648, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 4, "count_ms": 127, "cache_enabled": false}
+{"ts": "2026-11-17T06:40:11.833+00:00", "run_id": "37bd7e52", "source": "eval", "outcome": "fit_card", "query": "leather motorcycle coat", "strategy": "keyword", "parsed": {"description": "leather motorcycle coat", "size": null, "max_price": null}, "n_results": 4, "selected_id": "lst_014", "selected_title": "Leather Belt — Brown, Braided", "selected_price": 12.0, "error": null, "fit_card": "Found the ultimate 90s vintage steal on thredUp: this gorgeous brown b…", "duration_ms": 8420, "search_ms": 444, "model_calls": 2, "prompt_tokens": 680, "output_tokens": 559, "cache_hits": 0, "embed_calls": 0, "embed_tokens": 0, "count_ms": 0, "cache_enabled": false}
+{"ts": "2026-11-17T06:40:23.951+00:00", "run_id": "31e83ebf", "source": "eval", "outcome": "fit_card", "query": "ankle booties", "strategy": "semantic", "parsed": {"description": "ankle booties", "size": null, "max_price": null}, "n_results": 1, "selected_id": "lst_028", "selected_title": "Suede Chelsea Boots — Tan", "selected_price": 44.0, "error": null, "fit_card": "Score! I just hunted down these tan suede Chelsea boots on Poshmark fo…", "duration_ms": 3921, "search_ms": 1094, "model_calls": 2, "prompt_tokens": 626, "output_tokens": 536, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 3, "count_ms": 116, "cache_enabled": false}
+{"ts": "2026-11-17T06:40:24.279+00:00", "run_id": "d1b75ef3", "source": "eval", "outcome": "stopped", "query": "ankle booties", "strategy": "keyword", "parsed": {"description": "ankle booties", "size": null, "max_price": null}, "n_results": 0, "selected_id": null, "selected_title": null, "selected_price": null, "error": "No listings match the description 'ankle booties'. This looks more like a description mismatch than a budget problem. Try broader keywords or a different item type.", "fit_card": null, "duration_ms": 323, "search_ms": 322, "model_calls": 0, "prompt_tokens": 0, "output_tokens": 0, "cache_hits": 0, "embed_calls": 0, "embed_tokens": 0, "count_ms": 0, "cache_enabled": false}
+{"ts": "2026-11-17T06:41:15.562+00:00", "run_id": "0d7f98bd", "source": "eval", "outcome": "stopped", "query": "black tuxedo", "strategy": "semantic", "parsed": {"description": "black tuxedo", "size": null, "max_price": null}, "n_results": 0, "selected_id": null, "selected_title": null, "selected_price": null, "error": "No listings match 'black tuxedo'. Try broader keywords or a more general description.", "fit_card": null, "duration_ms": 1035, "search_ms": 1034, "model_calls": 0, "prompt_tokens": 0, "output_tokens": 0, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 3, "count_ms": 115, "cache_enabled": false}
+{"ts": "2026-11-17T06:41:18.713+00:00", "run_id": "fee4faad", "source": "eval", "outcome": "stopped", "query": "pearl necklace", "strategy": "semantic", "parsed": {"description": "pearl necklace", "size": null, "max_price": null}, "n_results": 0, "selected_id": null, "selected_title": null, "selected_price": null, "error": "No listings match the description 'pearl necklace'. This looks more like a description mismatch than a budget problem. Try broader keywords or a different item type.", "fit_card": null, "duration_ms": 1032, "search_ms": 1031, "model_calls": 0, "prompt_tokens": 0, "output_tokens": 0, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 3, "count_ms": 109, "cache_enabled": false}
+{"ts": "2026-11-17T06:41:34.326+00:00", "run_id": "e67eb0d3", "source": "eval", "outcome": "fit_card", "query": "vintage graphic tee under $30", "strategy": "semantic", "parsed": {"description": "vintage graphic tee", "size": null, "max_price": 30.0}, "n_results": 9, "selected_id": "lst_033", "selected_title": "Vintage Band Tee — Faded Grey", "selected_price": 19.0, "error": null, "fit_card": "Scored this perfectly faded grey vintage band tee on Depop for just $1…", "duration_ms": 4517, "search_ms": 1010, "model_calls": 2, "prompt_tokens": 620, "output_tokens": 493, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 4, "count_ms": 102, "cache_enabled": false}
+{"ts": "2026-11-17T06:41:41.835+00:00", "run_id": "c4d533b6", "source": "eval", "outcome": "fit_card", "query": "denim jacket under $50", "strategy": "semantic", "parsed": {"description": "denim jacket", "size": null, "max_price": 50.0}, "n_results": 3, "selected_id": "lst_007", "selected_title": "Denim Jacket — Light Wash, Cropped", "selected_price": 42.0, "error": null, "fit_card": "Scored this light wash cropped denim jacket on Poshmark for just $42, …", "duration_ms": 4349, "search_ms": 1038, "model_calls": 2, "prompt_tokens": 707, "output_tokens": 591, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 3, "count_ms": 110, "cache_enabled": false}
+{"ts": "2026-11-17T06:41:21.833+00:00", "run_id": "9a826618", "source": "eval", "outcome": "stopped", "query": "leather jacket less than $40", "strategy": "semantic", "parsed": {"description": "leather jacket", "size": null, "max_price": 40.0}, "n_results": 0, "selected_id": null, "selected_title": null, "selected_price": null, "error": "No listings fit within your budget of $40. Try a higher max price or a broader description.", "fit_card": null, "duration_ms": 1033, "search_ms": 1032, "model_calls": 0, "prompt_tokens": 0, "output_tokens": 0, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 3, "count_ms": 109, "cache_enabled": false}
+{"ts": "2026-11-17T06:41:28.763+00:00", "run_id": "a13e2046", "source": "eval", "outcome": "fit_card", "query": "velvet blazer max $40", "strategy": "semantic", "parsed": {"description": "velvet blazer", "size": null, "max_price": 40.0}, "n_results": 1, "selected_id": "lst_018", "selected_title": "Vintage Linen Blazer — Cream", "selected_price": 38.0, "error": null, "fit_card": "Scored this vintage cream linen blazer on thredUp for just $38, and I …", "duration_ms": 6929, "search_ms": 1014, "model_calls": 2, "prompt_tokens": 669, "output_tokens": 555, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 3, "count_ms": 102, "cache_enabled": false}
+{"ts": "2026-11-17T05:45:44.556+00:00", "run_id": "6e72450e", "source": "eval", "outcome": "fit_card", "query": "velvet blazer max $40", "strategy": "semantic", "parsed": {"description": "velvet blazer max $40", "size": null, "max_price": null}, "n_results": 2, "selected_id": "lst_036", "selected_title": "Velvet Blazer — Emerald Green", "selected_price": 52.0, "error": null, "fit_card": "Scored this emerald green velvet blazer on Depop for just $52, and hon…", "duration_ms": 14966, "search_ms": 1475, "model_calls": 2, "prompt_tokens": 722, "output_tokens": 614, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 7, "count_ms": 214, "cache_enabled": false}
+{"ts": "2026-11-17T05:50:34.995+00:00", "run_id": "f4264e8a", "source": "eval", "outcome": "stopped", "query": "vintage graphic tee under $30", "strategy": "semantic", "parsed": {"description": "vintage graphic tee", "size": null, "max_price": 30.0}, "n_results": 9, "selected_id": "lst_033", "selected_title": "Vintage Band Tee — Faded Grey", "selected_price": 19.0, "error": "The styling model is unavailable right now. Please try again later.", "fit_card": null, "duration_ms": 20666, "search_ms": 1244, "model_calls": 1, "prompt_tokens": 0, "output_tokens": 0, "cache_hits": 0, "embed_calls": 1, "embed_tokens": 4, "count_ms": 115, "cache_enabled": false}
+```
+
+Reading them: entries 1–2 are the extension's point. "leather motorcycle coat" finds the Leather Bomber (lst_022) with semantic search and a leather belt (lst_014) with keyword search. Entries 3–4 show keyword search finding nothing for "ankle booties" while semantic search finds the Chelsea Boots. Entries 5–6 are deliberate failures: impossible queries stopped before `suggest_outfit` with `n_results: 0`. Entries 10 and 11 are the same query after and before the improvement. Before (entry 11), no price was parsed and the $52 Velvet Blazer was picked. After (entry 10), the price is parsed and it's the $38 Linen Blazer.
+
+**Failed runs:** entry 12 is a real, unplanned failure from the 21:42 before-run. The search worked and picked lst_033, but the text model failed in `suggest_outfit`, so the agent stopped with `outcome: "stopped"`, `model_calls: 1` and no fit card. That's 14 such failures across both before-runs (8 + 6), all logged. A whole broken run is kept in `results/invalid/`: the first attempt ran under the wrong Python, all 72 searches failed with `No module named 'mcp'`, and every one left a record with the error.
+
+**What It Costs**
+
+Measured with `python capstone_eval.py --cost`: 10 runs of "vintage graphic tee under $30" with each strategy, response cache off, listing embeddings already cached. All 20 runs completed with a fit card. The numbers are averaged from those 20 records in `logs/runs.jsonl` (lines 145–164). Token counts are what the service reported for the text model (`usage_metadata`). For the embedding they come from the service's `count_tokens` for the exact text embedded, because the embedding API doesn't report usage.
+
+| Per run (average of 10) | Keyword | Semantic |
+|---|---|---|
+| Text-model calls | 2.00 | 2.00 |
+| Embedding calls | 0 | 1.00 |
+| Input tokens (text model) | 649.9 | 624.5 |
+| Output tokens (text model) | 532.0 | 516.5 |
+| Embedding tokens | 0 | 4.0 |
+| Duration, end to end | 6,988 ms | 7,246 ms |
+| Search step (`search_ms`) | 329 ms | 1,155 ms |
+
+In dollars, at $0.30 per 1M input and $2.50 per 1M output tokens for `gemini-3.5-flash-lite`: **about $0.0015 per run for both strategies** (keyword ≈ $0.00152, semantic ≈ $0.00148). Those prices come from third-party price listings (looked up 2026-11-16), not Google's own pricing page, so check them there. The 4 embedding tokens add under $0.000001 at any listed embedding price. Actual spend was **$0**, because this runs on the free tier.
+
+The tokens show that semantic search costs almost nothing extra: 4 tokens and one API call per run. Semantic's text-model tokens are slightly *lower* only because it picks a different tee (lst_033, not lst_002), whose description is shorter. The real cost of semantic search is **time**: about 0.8 s more per search (one embedding round trip plus the ~100 ms token count), roughly 4% of a 7-second run.
+
+**Run Log — Before**
+
+Run by `capstone_eval.py::trials`, scored by `capstone_eval.py::score`. Three runs per criterion, cache off. The full report is in `results/capstone_before_2026-11-16_1653.md`, with every raw record in the `.json` beside it.
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Semantic search finds paraphrased items | ≥4 of 5 each run; 3-run total beats keyword | 5/5 (kw 2/5) | 5/5 (kw 2/5) | 5/5 (kw 2/5) | MET (15/15 vs kw 6/15) |
+| 2. Impossible queries stop before suggest_outfit | ≥4 of 5 each run | 5/5 | 5/5 | 5/5 | MET |
+| 3. Queries that already worked still work | 2 of 2 each run (6 of 6) | 2/2 | 2/2 | 1/2 | MISSED |
+| 4. Semantic adds 1 API call, query embedding ≤20 tokens | 1 of 1 each run (3 of 3) | 1/1 (+1 call, 4 tok) | 1/1 (+1 call, 4 tok) | 1/1 (+1 call, 4 tok) | MET |
+| 5. Never selects an item over the user's price | 5 of 5 each run | 2/5 | 2/5 | 2/5 | MISSED |
+
+I ran the whole thing a second time before changing anything (`results/capstone_before_2026-11-16_2142.md`). Criteria 1, 2 and 5 came out identical. Criteria 3 and 4 didn't: C3 was 2/2, 0/2, 2/2 and C4 was 1/1, 0/1, 1/1, both MISSED. That disagreement is part of the diagnosis below.
+
+**Real output, one run per criterion** (from `capstone_eval.py::report`, before-run 21:42 unless noted):
+
+```
+1. Paraphrases — selected id (semantic / keyword), all three runs identical
+   leather motorcycle coat  lst_022 / lst_014     flowery summer frock  lst_013 / lst_023
+   ankle booties            lst_028 / None        chunky wool sweater   lst_008 / lst_008
+   gym shorts               lst_026 / lst_026
+2. Impossible queries: Trial 1: 5/5 stopped  Trial 2: 5/5 stopped  Trial 3: 5/5 stopped
+3. Trial 2 | vintage graphic tee under $30 | ('stopped', 'lst_033', 19.0) | MISSED
+   error: "The styling model is unavailable right now. Please try again later."
+4. Trial 2 | extra API calls 0 | embed tokens 4 | MISSED   (trials 1 and 3: +1 call, 4 tokens, MET)
+5. leather jacket less than $40 | lst_022 / 75.0 / None   (selected id / price / parsed max_price)
+   velvet blazer max $40        | lst_036 / 52.0 / None
+   platform shoes $40 or less   | lst_019 / 48.0 / None
+```
+
+**Verdicts and Diagnoses**
+
+| # | Verdict (before) | How I decided |
+|---|---|---|
+| 1 | MET | Semantic found the intended listing 15 of 15 times. Keyword found it 6 of 15 times. |
+| 2 | MET | All 15 impossible-query runs returned an empty list and stopped before `suggest_outfit`. None leaked. |
+| 3 | MISSED | 5 of 6 in one before-run and 4 of 6 in the other. Every miss was a run that stopped with "model is unavailable". |
+| 4 | MISSED (21:42) / MET (16:53) | The embedding side was +1 call and 4 tokens in every trial of both runs. The one miss was a run with one fewer *text-model* call. |
+| 5 | MISSED | 2 of 5 in every run of both before-runs, always the same three queries. |
+
+*Criterion 5: the query parser.* The miss was in `agent.py::parse_query`, not in semantic search or the search tool. The price pattern only knew "under / below / at most / up to / <=". "less than $40", "max $40" and "$40 or less" came out with `max_price: None`. `search_listings` therefore had no ceiling to filter on, and semantic search did exactly its job: it ranked the closest-meaning item first. Those were the $75 Leather Bomber, the $52 Velvet Blazer and the $48 Platform Sneakers. The leftover "less than $40" also stayed in the description and was embedded as part of the item. The same result came back every run because both the parsing and the embeddings are deterministic. Semantic search didn't create this gap, since it's been in the parser since unit 3, but it makes it matter more: it encourages natural wording, and it always finds *something* to rank first.
+
+*Criteria 3 and 4: the model call, not the search.* Every miss on these two was the same failure: `suggest_outfit` raised `ModelUnavailable`, so the agent stopped with "The styling model is unavailable right now" before `create_fit_card`. It happened 8 times in the 16:53 run and 6 in the 21:42 run, under both strategies, spread across the run. The mechanism is in `generate.py::generate`: it retries rate limits (429) only, and turns any other error, including a temporary unavailable/overloaded response, into `ModelUnavailable` on the first attempt. I can't name the exact error code, because `agent.py::run_agent` replaces the exception with a fixed sentence, so the original text never reaches the log. For criterion 4 this also exposed a weakness in how the criterion is counted: it compares total API calls of two whole runs, so a failure anywhere in the run moves the count. Search behaved correctly in every trial.
+
+**The Improvement**
+
+**What I changed:** `agent.py::parse_query` now recognises price wording before the number ("less than", "no more than", "max", "maximum of") and after it ("$40 or less", "$40 or under", "$40 max"). One change, in one function.
+
+**Why the diagnosis pointed at it:** criterion 5 missed the same three queries every time, and in each one `parsed.max_price` was `None`. Before running anything, I compared the old and new parser on every query the criteria use plus the unit 4 scenarios. Only those three queries parse differently, so the change couldn't move criteria 1–4.
+
+**Run Log — After** (`results/capstone_after_2026-11-16_2239.md`)
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Semantic search finds paraphrased items | ≥4 of 5 each run; 3-run total beats keyword | 5/5 (kw 2/5) | 5/5 (kw 2/5) | 5/5 (kw 2/5) | MET (15/15 vs kw 6/15) |
+| 2. Impossible queries stop before suggest_outfit | ≥4 of 5 each run | 5/5 | 5/5 | 5/5 | MET |
+| 3. Queries that already worked still work | 2 of 2 each run (6 of 6) | 2/2 | 2/2 | 2/2 | MET |
+| 4. Semantic adds 1 API call, query embedding ≤20 tokens | 1 of 1 each run (3 of 3) | 1/1 (+1 call, 4 tok) | 1/1 (+1 call, 4 tok) | 1/1 (+1 call, 4 tok) | MET |
+| 5. Never selects an item over the user's price | 5 of 5 each run | 5/5 | 5/5 | 5/5 | MET |
+
+**Side by side**
+
+| Criterion | Before (16:53) | Before (21:42) | After | Caused by the change? |
+|---|---|---|---|---|
+| 1 | MET | MET | MET | — |
+| 2 | MET | MET | MET | — |
+| 3 | MISSED (5/6) | MISSED (4/6) | MET (6/6) | **No** |
+| 4 | MET | MISSED (2/3) | MET | **No** |
+| 5 | MISSED (2/5 ×3) | MISSED (2/5 ×3) | **MET (5/5 ×3)** | **Yes** |
+
+**Did it help, and how do I know:** For criterion 5, yes. The three queries that failed every time before now parse to `max_price: 40.0` in all three runs. Two now stop, with no leather jacket or platform shoe under $40. "velvet blazer max $40" now picks the $38 Linen Blazer instead of the $52 Velvet Blazer.
+
+Criteria 3 and 4 also turned MET, **but not because of my change.** Their queries parse identically before and after. The after-run simply had zero "model is unavailable" failures, against 8 and 6 in the two before-runs. Nothing about the cause has been fixed.
+
+**What's Still Broken**
+
+1. **Temporary model failures aren't retried** (`generate.py::generate`). This caused every criterion 3 and 4 miss, and it's still there; the after-run was lucky. Next I'd retry temporary unavailable/overloaded errors with the same backoff already used for rate limits. I'd also log the original exception text instead of `agent.py`'s fixed sentence, so the error code is visible. I stopped short of this because it was my second improvement, and a fix for a random failure can't be proven in three runs. It needs many runs, or a deliberately injected failure, to show anything.
+2. **Criterion 4 counts calls across the whole run.** Better wording would count embedding calls directly ("exactly 1 embedding call per semantic run"), so an unrelated failure can't move it. I haven't changed it, because criteria don't get rewritten after results.
+3. **"velvet blazer max $40" returns a blazer that isn't velvet.** With no velvet blazer under $40, semantic search offers the closest blazer instead of stopping. That's within budget, so criterion 5 passes, but it's arguably a near-miss the user didn't ask for. Raising `SEMANTIC_MIN_SCORE` would stop it, but it would also put criterion 1 at risk, because the 0.62 cutoff sits in a gap only about 0.06 wide.
+4. **The stop message still blames the wrong thing for semantic stops.** It still uses keyword logic (out of scope this unit), so a semantic stop can say "No listings fit within your budget" when the real issue is the description.
+5. **Smaller:** "no more than 20 dollars" leaves "dollars" in the description. The size filter is still an exact string match ("M" never matches "S/M"; unit 4 criterion 5, out of scope).
+
+**How I Used AI**
+
+I worked with Claude (Claude Code) throughout this unit.
+- **Planning:** it helped me compare the three shapes and draft the scope.
+- **Code:** it wrote the semantic search code (`semantic.py`, `generate.py::embed`), the logging (`runlog.py`), the trial runner (`capstone_eval.py`) and the parser change.
+- **Criteria:** I picked which five to use and made the key decisions: compare totals for criterion 1, lower criterion 2 to 4 of 5, keep a loose regression check, drop the timing criterion because measuring only warm runs felt like cheating, and replace it with the price ceiling. Claude drafted much of the criteria wording, including the "why this target" reasons for criteria 3 and 5. The course asks for criteria written unaided, so I'm stating that plainly.
+- **Feedback I acted on:** a self-check review showed criterion 3's "same category" check would pass a cardigan for a graphic tee, so I changed it to a list of acceptable listing IDs fixed before testing.
+- **What I caught by running it:** my first before-run used the wrong Python and every search failed. The trial runner had scored criteria 2 and 5 as MET anyway, because the agent turned the crash into a clean stop. That run is kept in `results/invalid/` and the runner was fixed before the real run.
