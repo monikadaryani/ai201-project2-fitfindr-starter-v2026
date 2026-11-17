@@ -72,9 +72,16 @@ C4_EXTRA_CALLS = 1               # exactly
 C4_MAX_EMBED_TOKENS = 20         # tokens sent to the embedding model (query only)
 C4_TARGET = 3                    # out of 3 trials
 
-# Criterion 5 — warm search time, from criterion 1's semantic runs.
-C5_MAX_SEARCH_MS = 2000
-C5_TARGET = 14                   # out of 5 queries x 3 trials
+# Criterion 5 — price ceiling under semantic search. (query, ceiling)
+# Pass = no over-budget item selected: the pick costs <= ceiling, or it stopped.
+PRICE_QUERIES = [
+    ("leather jacket under $40", 40.0),
+    ("platform shoes below $40", 40.0),
+    ("leather jacket less than $40", 40.0),
+    ("velvet blazer max $40", 40.0),
+    ("platform shoes $40 or less", 40.0),
+]
+C5_TARGET_PER_TRIAL = 5          # out of 5, in every trial
 
 # The 10-run cost measurement (--cost).
 COST_RUNS = 10
@@ -133,7 +140,7 @@ def met(ok: bool) -> str:
 
 
 def score(runs: dict) -> dict:
-    """runs = {"c1": [...], "c2": [...], "c3": [...]} of trial-tagged records."""
+    """runs = {"c1": [...], "c2": [...], "c3": [...], "c5": [...]} of trial-tagged records."""
     out = {}
 
     # Criterion 1
@@ -197,14 +204,19 @@ def score(runs: dict) -> dict:
         })
     out["c4"] = {"rows": rows, "passes": passes, "met": passes >= C4_TARGET}
 
-    # Criterion 5 (criterion 1's semantic runs)
-    sem_runs = [r for r in runs["c1"] if r["strategy"] == "semantic"]
-    rows = [{
-        "trial": r["trial"], "query": r["query"], "search_ms": r.get("search_ms"),
-        "count_ms": r.get("count_ms"), "met": (r.get("search_ms") or 10**9) < C5_MAX_SEARCH_MS,
-    } for r in sem_runs]
-    passes = sum(r["met"] for r in rows)
-    out["c5"] = {"rows": rows, "passes": passes, "met": passes >= C5_TARGET}
+    # Criterion 5
+    rows, all_ok = [], True
+    for t in range(1, TRIALS + 1):
+        trial = {r["query"]: r for r in runs["c5"] if r["trial"] == t}
+        over = {q: (trial[q]["selected_id"], trial[q]["selected_price"]) for q, cap in PRICE_QUERIES
+                if trial[q]["selected_price"] is not None and trial[q]["selected_price"] > cap}
+        held = len(PRICE_QUERIES) - len(over)
+        ok = held >= C5_TARGET_PER_TRIAL
+        all_ok &= ok
+        rows.append({"trial": t, "held": held, "over_budget": over, "met": ok,
+                     "picks": {q: (trial[q]["selected_id"], trial[q]["selected_price"],
+                                   trial[q]["parsed"].get("max_price")) for q, _ in PRICE_QUERIES}})
+    out["c5"] = {"rows": rows, "met": all_ok}
     return out
 
 
@@ -228,7 +240,9 @@ def report(label: str, stamp: str, cold: bool, s: dict) -> str:
     L.append(f"| 3 | old queries still work | {C3_TARGET}/6 | {s['c3']['passes']}/6 | {met(s['c3']['met'])} |")
     L.append(f"| 4 | +{C4_EXTRA_CALLS} call, query embedding ≤{C4_MAX_EMBED_TOKENS} tokens | {C4_TARGET}/3 | "
              f"{s['c4']['passes']}/3 | {met(s['c4']['met'])} |")
-    L.append(f"| 5 | warm search < {C5_MAX_SEARCH_MS} ms | ≥{C5_TARGET}/15 | {s['c5']['passes']}/15 | {met(s['c5']['met'])} |")
+    L.append(f"| 5 | no over-budget pick | {C5_TARGET_PER_TRIAL}/5 each trial | "
+             + ", ".join(f"T{r['trial']}: {r['held']}/5" for r in s["c5"]["rows"])
+             + f" | {met(s['c5']['met'])} |")
 
     L += ["", "## 1. Paraphrases — selected id (semantic / keyword)", "",
           "| Query | Intended | " + " | ".join(f"Trial {t}" for t in range(1, TRIALS + 1)) + " |",
@@ -256,29 +270,32 @@ def report(label: str, stamp: str, cold: bool, s: dict) -> str:
     L.append("The limit applies to embed tokens (the query embedding alone). Extra input tokens, "
              "which include the text-model prompts, are shown for reference only.")
 
-    L += ["", "## 5. Warm search time (ms)", "",
-          "| Query | " + " | ".join(f"Trial {t}" for t in range(1, TRIALS + 1)) + " |",
-          "|---|" + "---|" * TRIALS]
-    for q, _ in PARAPHRASES:
-        cells = [r for r in s["c5"]["rows"] if r["query"] == q]
-        L.append(f"| {q} | " + " | ".join(
-            f"{r['search_ms']}{'' if r['met'] else ' ✗'} (count {r['count_ms']})" for r in sorted(cells, key=lambda r: r["trial"])) + " |")
+    L += ["", "## 5. Price ceiling — (selected id, price, parsed max_price)", "",
+          "| Query | Ceiling | " + " | ".join(f"Trial {t}" for t in range(1, TRIALS + 1)) + " |",
+          "|---|---|" + "---|" * TRIALS]
+    for q, cap in PRICE_QUERIES:
+        L.append(f"| {q} | ${cap:.0f} | " + " | ".join(
+            "{} / {} / {}".format(*r["picks"][q]) for r in s["c5"]["rows"]) + " |")
     L.append("")
-    L.append("`count` is the part of the search spent counting tokens for the cost measurement.")
+    L.append("A parsed max_price of None means the query parser didn't recognise the price, "
+             "so no price filter was applied.")
     return "\n".join(L) + "\n"
 
 
 def trials() -> dict:
-    runs = {"c1": [], "c2": [], "c3": []}
+    runs = {"c1": [], "c2": [], "c3": [], "c5": []}
     for t in range(1, TRIALS + 1):
         print(f"\n── Trial {t} of {TRIALS}")
-        print("  Criterion 1 / 5 — paraphrases")
+        print("  Criterion 1 — paraphrases")
         for q, _ in PARAPHRASES:
             for strategy in ("semantic", "keyword"):
                 runs["c1"].append({**run(q, strategy), "trial": t})
         print("  Criterion 2 — impossible queries")
         for q in IMPOSSIBLE:
             runs["c2"].append({**run(q, "semantic"), "trial": t})
+        print("  Criterion 5 — price ceiling")
+        for q, _ in PRICE_QUERIES:
+            runs["c5"].append({**run(q, "semantic"), "trial": t})
         print("  Criterion 3 / 4 — old queries")
         for q in REGRESSION:
             for strategy in ("semantic", "keyword"):

@@ -148,7 +148,7 @@ Written 2026-11-16, after building semantic search and before running any trials
 
 The queries below are new. None of them were used in the smoke test or to pick `SEMANTIC_MIN_SCORE` (0.62). Those queries were "band shirt", "jean jacket", "something cozy for winter", "wedding dress", "laptop charger" and "car tires". Testing on them would only show that the cutoff fits the queries it was picked from.
 
-Every criterion is run **3 trials**. Criteria 1–3 are about the extension; 4 and 5 are about what it costs to run.
+Every criterion is run **3 trials**. Criteria 1–3 and 5 are about how semantic search behaves; 4 is about what it costs to run.
 
 ---
 
@@ -202,9 +202,21 @@ The listing vectors are supposed to be embedded once and reused. If a run makes 
 
 ---
 
-## 5. The warm search step finishes in under 2.0 seconds
+## 5. Semantic search never selects an item over the user's price
 
-On a **warm** run (with `.cache/listing_embeddings.json` already present, so the 40 listings don't need embedding), the search step takes **under 2.0 seconds in at least 14 of 15 trials**. The search step is the MCP `search_listings` call, including the query embedding and the token-counting call (about 100 ms, also logged separately as `count_ms`), i.e. `search_ms` exactly as logged. This is measured for all 5 queries from criterion 1, in 3 trials each (15 trials), and the time is taken from the structured log.
+Five queries with a price ceiling, each with an over-budget listing that semantic search would likely rank first if the price were ignored. Two use phrasings the query parser recognises ("under", "below"); three use natural phrasings it doesn't:
+
+| Query | Ceiling | Over-budget listing it could pick |
+|---|---|---|
+| leather jacket under $40 | $40 | lst_022 — 90s Leather Bomber, $75 |
+| platform shoes below $40 | $40 | lst_009 — Platform Mary Janes, $55 |
+| leather jacket less than $40 | $40 | lst_022 — 90s Leather Bomber, $75 |
+| velvet blazer max $40 | $40 | lst_036 — Velvet Blazer, $52 |
+| platform shoes $40 or less | $40 | lst_009 — Platform Mary Janes, $55 |
+
+With `AI201_SEARCH=semantic`, no over-budget item is selected: either the selected item costs at most the ceiling, or the agent stops without selecting anything. That must hold for **5 of 5 queries, in each of 3 trials**.
 
 **Why this target:**
-The search step, not the whole run, because the two model calls that write the outfit and the fit card vary by seconds between runs. That noise would hide any difference search makes. Warm, because a cold run (no `.cache/listing_embeddings.json`) first embeds all 40 listings, which is a one-time setup cost, not a per-request cost. Each MCP call starts a new Python process, so nothing stays in memory between runs. The saved file is the only thing that makes a run warm. 2 seconds allows for the MCP server starting a new Python process (which keyword search pays too) plus one embedding round trip. 14 of 15, not the median, because a median can hide a search that is slow often. One slow trial in 15 can be network noise outside the system, such as a single slow round trip to the embedding service. Two or more would be a pattern worth diagnosing, for example rate-limit retries: `generate.embed()` waits at least 2 s before retrying, and each MCP call is a fresh process, so local pacing resets every time.
+<!-- TODO: your reason, in your own words. -->
+
+> **Revised before any trials (2026-11-16):** criterion 5 was originally "the warm search step finishes in under 2.0 seconds". I replaced it before running anything, because measuring only warm searches felt like excluding the slow case. Duration is still logged for every run; it just isn't a criterion.
