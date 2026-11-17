@@ -186,10 +186,19 @@ A leaked item, where the agent styles an outfit for something the user didn't as
 
 The two matching queries from unit 4's scenarios: **"vintage graphic tee under $30"** and **"denim jacket under $50"**.
 
-With `AI201_SEARCH=semantic`, each one completes all three tools and returns a fit card. The selected item is in the same `category` as the item keyword search selects for that query in the same trial. That must happen for **both queries, in each of 3 trials (6 of 6)**.
+Acceptable listings, decided from the data before any trial:
+
+| Query | Ceiling | Acceptable listing ids |
+|---|---|---|
+| vintage graphic tee under $30 | $30 | lst_002 (Y2K Baby Tee, butterfly graphic), lst_006 (Graphic Tee, 2003 Tour), lst_033 (Vintage Band Tee) |
+| denim jacket under $50 | $50 | lst_007 (Denim Jacket, Light Wash) |
+
+Left out on purpose: lst_015 (Graphic Hoodie, a hoodie, not a tee) and lst_038 (Denim Vest, a vest, not a jacket).
+
+With `AI201_SEARCH=semantic`, a run passes when all three hold: the selected item is one of the acceptable listings for that query; its price is at most the ceiling; and the run returns a non-empty fit card with no `error`. That must happen for **both queries, in each of 3 trials (6 of 6)**.
 
 **Why this target:**
-Category, not the exact listing, because semantic may reasonably pick a different graphic tee than keyword did.
+These two queries passed under keyword search in unit 4, so if they fail now, the change caused it. I check against a list of acceptable listings that I picked from the data before testing, not against keyword's pick. A category match would pass a cardigan for "vintage graphic tee", and keyword's pick isn't proof of a correct answer either. More than one graphic tee is acceptable, because semantic search may reasonably prefer a different one. The target is 6 of 6 because these are the easy cases: the words in the query appear in the listings, and each query has an acceptable item under its price. The one way they should fail is the 0.62 cutoff dropping a correct match, or semantic ranking a near-miss (the Graphic Hoodie, the Denim Vest) first. Either would mean semantic search broke something that already worked.
 
 ---
 
@@ -217,6 +226,6 @@ Five queries with a price ceiling, each with an over-budget listing that semanti
 With `AI201_SEARCH=semantic`, no over-budget item is selected: either the selected item costs at most the ceiling, or the agent stops without selecting anything. That must hold for **5 of 5 queries, in each of 3 trials**.
 
 **Why this target:**
-<!-- TODO: your reason, in your own words. -->
+Going over budget is a different kind of mistake from picking a near-miss item. A near-miss is still something the user might want. An over-budget item ignores a limit the user stated outright, and they can't buy it. That's why this is 5 of 5 when criteria 1 and 2 allow one miss. Search applies the price filter before ranking, so whenever the price is parsed, an over-budget item can't be selected. The real risk is wording. Semantic search invites natural queries, and the query parser only recognises "under", "below", "at most" and "up to". "Less than $40", "max $40" or "$40 or less" get no price filter at all, and semantic search will happily rank the $75 Leather Bomber first. So this criterion tests whether the extension is safe with the phrasing it encourages.
 
 > **Revised before any trials (2026-11-16):** criterion 5 was originally "the warm search step finishes in under 2.0 seconds". I replaced it before running anything, because measuring only warm searches felt like excluding the slow case. Duration is still logged for every run; it just isn't a criterion.

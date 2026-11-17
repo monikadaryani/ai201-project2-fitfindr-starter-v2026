@@ -59,10 +59,16 @@ C2_TARGET_PER_TRIAL = 4          # stops early, out of 5, in every trial
 
 # Criterion 3 — unit 4 queries that worked under keyword search.
 # Keyword's pick is taken from the SAME trial.
+# Pass = selected id is acceptable, price <= ceiling, non-empty fit card, no error.
+# Keyword runs of these queries are still made, for criterion 4's comparison.
 REGRESSION = [
     "vintage graphic tee under $30",
     "denim jacket under $50",
 ]
+ACCEPTABLE = {
+    "vintage graphic tee under $30": ({"lst_002", "lst_006", "lst_033"}, 30.0),
+    "denim jacket under $50": ({"lst_007"}, 50.0),
+}
 C3_TARGET = 6                    # out of 2 queries x 3 trials
 
 # Criterion 4 — extra cost of semantic over keyword, same query, same trial.
@@ -180,11 +186,17 @@ def score(runs: dict) -> dict:
         for q in REGRESSION:
             sem = next(r for r in runs["c3"] if r["trial"] == t and r["query"] == q and r["strategy"] == "semantic")
             kw = next(r for r in runs["c3"] if r["trial"] == t and r["query"] == q and r["strategy"] == "keyword")
-            ok = sem["outcome"] == "fit_card" and sem["selected_category"] == kw["selected_category"]
+            allowed, cap = ACCEPTABLE[q]
+            ok = (
+                sem["selected_id"] in allowed
+                and sem["selected_price"] is not None and sem["selected_price"] <= cap
+                and bool((sem.get("fit_card") or "").strip())
+                and not sem.get("error")
+            )
             passes += ok
             rows.append({
-                "trial": t, "query": q, "semantic": (sem["outcome"], sem["selected_id"], sem["selected_category"]),
-                "keyword": (kw["outcome"], kw["selected_id"], kw["selected_category"]), "met": ok,
+                "trial": t, "query": q, "semantic": (sem["outcome"], sem["selected_id"], sem["selected_price"]),
+                "keyword": (kw["outcome"], kw["selected_id"], kw["selected_price"]), "met": ok,
             })
     out["c3"] = {"rows": rows, "passes": passes, "met": passes >= C3_TARGET}
 
@@ -237,7 +249,7 @@ def report(label: str, stamp: str, cold: bool, s: dict) -> str:
     L.append(f"| 2 | impossible queries stop | ≥{C2_TARGET_PER_TRIAL}/5 each trial | "
              + ", ".join(f"T{r['trial']}: {r['stopped']}/5" for r in s["c2"]["rows"])
              + f" | {met(s['c2']['met'])} |")
-    L.append(f"| 3 | old queries still work | {C3_TARGET}/6 | {s['c3']['passes']}/6 | {met(s['c3']['met'])} |")
+    L.append(f"| 3 | old queries: acceptable item, in budget, fit card | {C3_TARGET}/6 | {s['c3']['passes']}/6 | {met(s['c3']['met'])} |")
     L.append(f"| 4 | +{C4_EXTRA_CALLS} call, query embedding ≤{C4_MAX_EMBED_TOKENS} tokens | {C4_TARGET}/3 | "
              f"{s['c4']['passes']}/3 | {met(s['c4']['met'])} |")
     L.append(f"| 5 | no over-budget pick | {C5_TARGET_PER_TRIAL}/5 each trial | "
@@ -255,7 +267,7 @@ def report(label: str, stamp: str, cold: bool, s: dict) -> str:
     for r in s["c2"]["rows"]:
         L.append(f"- Trial {r['trial']}: {r['stopped']}/5 stopped" + (f"; leaked: {r['leaks']}" if r["leaks"] else ""))
 
-    L += ["", "## 3. Old queries — (outcome, id, category)", "",
+    L += ["", "## 3. Old queries — (outcome, id, price); keyword shown for reference only", "",
           "| Trial | Query | Semantic | Keyword | Met |", "|---|---|---|---|---|"]
     for r in s["c3"]["rows"]:
         L.append(f"| {r['trial']} | {r['query']} | {r['semantic']} | {r['keyword']} | {met(r['met'])} |")
