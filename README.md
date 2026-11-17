@@ -620,6 +620,8 @@ In dollars, at $0.30 per 1M input and $2.50 per 1M output tokens for `gemini-3.5
 
 The tokens show that semantic search costs almost nothing extra: 4 tokens and one API call per run. Semantic's text-model tokens are slightly *lower* only because it picks a different tee (lst_033, not lst_002), whose description is shorter. The real cost of semantic search is **time**: about 0.8 s more per search (one embedding round trip plus the ~100 ms token count), roughly 4% of a 7-second run.
 
+**At a hundred people a day**, assuming one semantic query each: 100 runs × $0.00148 = **$0.15 a day**, and × 30 days = **about $4.40 a month**. API calls are 100 runs × 3 calls (2 text-model + 1 embedding) = 300 calls a day. Compute time is 100 runs × 7.25 s ≈ 12 minutes of agent time a day, though `serve.py` handles one request at a time, so at busy moments people would queue behind each other.
+
 **Run Log — Before**
 
 Run by `capstone_eval.py::trials`, scored by `capstone_eval.py::score`. Three runs per criterion, cache off. The full report is in `results/capstone_before_2026-11-16_1653.md`, with every raw record in the `.json` beside it.
@@ -696,11 +698,22 @@ Criteria 3 and 4 also turned MET, **but not because of my change.** Their querie
 
 **What's Still Broken**
 
+No criterion is missed in the after-run, but two of the five passed only because no model outages happened that run, and three targets were set too low.
+
+**Targets set too low:**
+- **Criterion 1** asked for at least 4 of 5 per run and got 15 of 15 in all three runs (and in both before-runs). I'd tighten it to 5 of 5 every run, on a harder set of 10 paraphrases. The current five were easy enough that semantic search never missed.
+- **Criterion 2** was lowered to 4 of 5 per run before testing and got 15 of 15 every time. It should go back to 5 of 5, on queries closer to the 0.62 cutoff. "wedding dress" scored 0.605, so the current queries weren't testing the edge.
+- **Criterion 3** checks only two easy queries whose words appear in the listings. Its target is 6 of 6, but its scope is narrow. I'd add more of the unit 4 queries.
+
+**Still broken:**
+
 1. **Temporary model failures aren't retried** (`generate.py::generate`). This caused every criterion 3 and 4 miss, and it's still there; the after-run was lucky. Next I'd retry temporary unavailable/overloaded errors with the same backoff already used for rate limits. I'd also log the original exception text instead of `agent.py`'s fixed sentence, so the error code is visible. I stopped short of this because it was my second improvement, and a fix for a random failure can't be proven in three runs. It needs many runs, or a deliberately injected failure, to show anything.
 2. **Criterion 4 counts calls across the whole run.** Better wording would count embedding calls directly ("exactly 1 embedding call per semantic run"), so an unrelated failure can't move it. I haven't changed it, because criteria don't get rewritten after results.
 3. **"velvet blazer max $40" returns a blazer that isn't velvet.** With no velvet blazer under $40, semantic search offers the closest blazer instead of stopping. That's within budget, so criterion 5 passes, but it's arguably a near-miss the user didn't ask for. Raising `SEMANTIC_MIN_SCORE` would stop it, but it would also put criterion 1 at risk, because the 0.62 cutoff sits in a gap only about 0.06 wide.
 4. **The stop message still blames the wrong thing for semantic stops.** It still uses keyword logic (out of scope this unit), so a semantic stop can say "No listings fit within your budget" when the real issue is the description.
 5. **Smaller:** "no more than 20 dollars" leaves "dollars" in the description. The size filter is still an exact string match ("M" never matches "S/M"; unit 4 criterion 5, out of scope).
+
+**What I'd do next:** With another unit, the first thing I'd do is retry temporary model failures in `generate.py` and log the real error code. That's the only failure a user actually saw in these tests: 14 of 144 before-runs ended with "model is unavailable", about 1 in 10. It does more harm than any search-quality issue I measured, because semantic search found the right item 15 of 15 times.
 
 **How I Used AI**
 
