@@ -40,6 +40,8 @@ Fields (one record per run):
     cache_hits       text-model answers served from the local cache (cost nothing)
     embed_calls      embedding calls made by the search (inside the MCP server)
     embed_tokens     tokens in the text sent to the embedding model
+    count_ms         part of search_ms spent counting those tokens (a measurement
+                     round trip, not part of the search itself)
     cache_enabled    whether the response cache was on for this run
 """
 
@@ -124,6 +126,7 @@ def logged_run(query: str, wardrobe: dict, source: str = "cli", strategy: str | 
             "cache_hits": generate.cache_hits() - hits_before,
             "embed_calls": usage.get("embed_calls", 0),
             "embed_tokens": usage.get("embed_tokens", 0),
+            "count_ms": usage.get("count_ms", 0),
             "cache_enabled": config.CACHE_ENABLED,
         })
 

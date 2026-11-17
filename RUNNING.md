@@ -4,6 +4,95 @@ Everything about how the starter works and how to use it.
 
 ---
 
+## Capstone run path — Path B, local with logs
+
+FitFindr with semantic search runs on your own machine, started by one
+command. Every request writes a record to `logs/runs.jsonl`. There's no hosted
+URL. This section is everything a fresh checkout needs; the starter's
+original notes follow below it.
+
+### What the environment needs
+
+| Thing | What's needed |
+|---|---|
+| Python | 3.11, 3.12 or 3.13. **Tested on 3.12.11.** Not 3.14 |
+| Packages | `requirements.txt` (bounded ranges). Tested with exactly: `google-genai==1.75.0`, `mcp==1.30.0`, `Flask==3.1.3`, `gunicorn==23.0.0`, `python-dotenv==1.1.1` |
+| API key | A Gemini API key in `.env` as `GEMINI_API_KEY`. Used for the two text-model calls and for the embedding calls |
+| Model files | **None.** Both models are called over the API (`gemini-3.5-flash-lite` for text, `gemini-embedding-001` for embeddings). Nothing is downloaded |
+| Generated on first run | `.cache/listing_embeddings.json`, about 690 KB: the 40 listing embeddings, made with one API call the first time semantic search runs and reused afterwards. Not committed; it rebuilds itself. That first semantic search takes about a second longer |
+| Memory | Small. The server, plus one short-lived Python process per search (the MCP server) |
+
+### Set up once
+
+macOS / Linux, from the repo folder:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env          # then put your key in .env
+python test.py                # should end with "10 passed, 0 failed"
+```
+
+> **If you use conda or Miniconda:** run `conda deactivate` first, or conda's
+> Python stays first on your PATH and `which python` won't point at `.venv`.
+> Then check: `which python` should end in `.venv/bin/python`.
+>
+> **If you move or rename the repo folder**, delete `.venv` and redo the steps
+> above. A virtual environment remembers the path it was created in and stops
+> working when that path changes.
+
+### Start it — the one command
+
+```bash
+AI201_SEARCH=semantic python serve.py
+```
+
+It listens on `http://localhost:5000` (set `PORT` to change it) and handles
+one request at a time. Leave out `AI201_SEARCH=semantic` to default to
+keyword search. Each request can also choose its strategy itself.
+
+### Use it
+
+In a second terminal:
+
+```bash
+curl http://localhost:5000/health
+
+curl -X POST http://localhost:5000/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "leather motorcycle coat", "strategy": "semantic"}'
+```
+
+`/ask` takes `query` (required), `strategy` (`"keyword"` or `"semantic"`,
+optional) and `wardrobe` (optional). It returns the session as JSON. Read
+`error` first: if it's set, the agent stopped early and says why.
+
+### Read the log
+
+```bash
+python runlog.py         # last 10 runs, one line each
+python runlog.py 25      # last 25
+```
+
+Each run appends one JSON line to `logs/runs.jsonl`, including runs that
+stopped early, crashed, or were rejected. The fields are listed at the top of
+`runlog.py`. `python app.py ask '...'` writes to the same log.
+
+### Measuring cost or speed
+
+Run with the response cache off, or cached answers make runs look free and
+fast:
+
+```bash
+AI201_CACHE=0 AI201_SEARCH=semantic python serve.py
+```
+
+Every record has `cache_enabled`, so you can check afterwards which runs had
+it on.
+
+---
+
 ## Before your first class
 
 Setup happens **before class**. The [environment setup page](../pages/ide_setup)
