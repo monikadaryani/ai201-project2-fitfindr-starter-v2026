@@ -59,7 +59,21 @@ works with a direct call, and **a documented failure earns the point in full.**
 
 from mcp.server.fastmcp import FastMCP
 
+import json
+
+import config
+import generate
 from tools import search_listings as _search_listings_impl  # noqa: F401 — you'll use this below
+
+USAGE_FILE = config.CACHE_DIR / "last_search_usage.json"
+
+
+def _report_usage() -> None:
+    try:
+        config.CACHE_DIR.mkdir(exist_ok=True)
+        USAGE_FILE.write_text(json.dumps(generate.embed_usage()), encoding="utf-8")
+    except OSError:
+        pass
 
 # log_level="WARNING" keeps the server from printing an INFO line for every
 # request. Without it your terminal fills with "Processing request of type
@@ -95,7 +109,13 @@ def search_listings(
         title, description, category, style_tags, size, condition, price, colors, brand,
         and platform.
     """
-    return _search_listings_impl(description, size, max_price, strategy)
+    results = _search_listings_impl(description, size, max_price, strategy)
+    # Capstone logging: the embedding call happens in this process, so the
+    # agent's counters never see it. This server is a fresh process per call,
+    # so its totals are exactly this call's usage. Hand them back through a
+    # file, leaving the tool's return value (the MCP contract) unchanged.
+    _report_usage()
+    return results
 
 # ──────────────────────────────────────────────────────────────────────────────
 #

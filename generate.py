@@ -41,6 +41,8 @@ _session_calls = 0
 _cache_hits = 0
 _prompt_tokens = 0
 _output_tokens = 0
+_embed_calls = 0
+_embed_tokens = 0
 _client = None
 _budget_warned = False
 
@@ -154,6 +156,34 @@ def usage() -> str:
 
 def call_count() -> int:
     return _session_calls
+
+
+def cache_hits() -> int:
+    return _cache_hits
+
+
+def embed_usage() -> dict:
+    """Embedding calls and the tokens sent to them, this process only."""
+    return {"embed_calls": _embed_calls, "embed_tokens": _embed_tokens}
+
+
+def _count_embed_tokens(client, texts: list[str]) -> int | None:
+    """
+    How many tokens the embedding call was charged for.
+
+    The embedding API doesn't report usage the way generate_content does, so
+    this asks the service's token counter for the same texts. count_tokens is
+    free and is not counted as a call. A failure here returns None rather than
+    breaking a search that already succeeded.
+    """
+    try:
+        total = 0
+        for text in texts:
+            result = client.models.count_tokens(model=config.EMBEDDING_MODEL, contents=text)
+            total += int(result.total_tokens or 0)
+        return total
+    except Exception:  # noqa: BLE001 — counting must never break a working call
+        return None
 
 
 def token_counts() -> dict:
@@ -363,7 +393,7 @@ def embed(texts: list[str], task_type: str) -> list[list[float]]:
     cached here — semantic.py caches the listing vectors itself, and a query
     vector should be a real call so cost measurements are real.
     """
-    global _session_calls
+    global _session_calls, _embed_calls, _embed_tokens
 
     _check_budget()
 
@@ -388,6 +418,10 @@ def embed(texts: list[str], task_type: str) -> list[list[float]]:
                     f"The embedding model returned {len(vectors)} vectors for "
                     f"{len(texts)} texts."
                 )
+            _embed_calls += 1
+            counted = _count_embed_tokens(client, texts)
+            if counted is not None:
+                _embed_tokens += counted
             return vectors
 
         except ModelUnavailable:

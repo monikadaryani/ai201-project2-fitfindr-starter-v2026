@@ -13,7 +13,9 @@ Build and test your three tools in `tools.py` first. Then come here.
     python agent.py          runs both example paths below
 """
 
+import json
 import re
+import time
 
 import config
 import trace
@@ -124,6 +126,8 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "query": query,              # what the user typed
         "parsed": {},                # description / size / max_price you pulled out of it
         "search_strategy": config.SEARCH_STRATEGY,  # "keyword" or "semantic" (capstone)
+        "timings": {},               # capstone: search_ms, for the run log
+        "search_usage": {},          # capstone: embedding calls/tokens made by the search
         "search_results": [],        # everything search_listings returned
         "selected_item": None,       # the one you chose — goes into suggest_outfit
         "wardrobe": wardrobe,        # the user's wardrobe
@@ -135,7 +139,7 @@ def new_session(query: str, wardrobe: dict) -> dict:
 
 # ── planning loop ─────────────────────────────────────────────────────────────
 
-def run_agent(query: str, wardrobe: dict) -> dict:
+def run_agent(query: str, wardrobe: dict, strategy: str | None = None) -> dict:
     """
     Run the loop once and return the finished session.
 
@@ -193,6 +197,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     """
     #  1. Start a session with new_session().
     session = new_session(query, wardrobe)
+    if strategy:
+        session["search_strategy"] = strategy
     
     
     #       2. Count the times round the loop, and call trace.check_iterations(count)
@@ -221,6 +227,9 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     # message instead of a stack trace, the same way the two model tools below
     # handle ModelUnavailable. (Falling back to keyword search wouldn't help:
     # suggest_outfit needs the same model a step later.)
+    usage_file = config.CACHE_DIR / "last_search_usage.json"
+    usage_file.unlink(missing_ok=True)
+    search_start = time.perf_counter()
     try:
         session["search_results"] = call_tool(
             "search_listings",
@@ -232,6 +241,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             },
         )
     except MCPError as exc:
+        session["timings"]["search_ms"] = round((time.perf_counter() - search_start) * 1000)
         detail = str(exc).strip().splitlines()[0] if str(exc).strip() else "unknown error"
         trace.step(
             "search_listings (via MCP)",
@@ -243,6 +253,11 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             f"Please try again later. (Detail: {detail})"
         )
         return session
+    session["timings"]["search_ms"] = round((time.perf_counter() - search_start) * 1000)
+    try:
+        session["search_usage"] = json.loads(usage_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        session["search_usage"] = {}
     trace.step(
         "search_listings (via MCP)",
         inputs=session["parsed"],

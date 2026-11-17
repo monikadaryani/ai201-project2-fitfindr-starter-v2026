@@ -105,13 +105,13 @@ def cmd_examples(args):
 
 
 def _ask_one(query, wardrobe, use_trace):
-    from agent import run_agent
+    import runlog
     import trace as trace_module
 
     if use_trace:
         trace_module.start_trace()
 
-    session = run_agent(query, wardrobe)
+    session = runlog.logged_run(query, wardrobe, source="cli")
 
     print()
     if session["error"]:
