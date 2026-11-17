@@ -36,8 +36,18 @@ def parse_query(query: str) -> dict:
     size_match = re.search(r"(?:size|sz)\s*([a-z0-9/]+)", lower_text)
     size = size_match.group(1).upper() if size_match else None
 
+    # Capstone improvement: the unit 3 pattern only knew under / below / at most /
+    # up to / <=. Natural phrasings ("less than $40", "max $40", "$40 or less")
+    # got no price at all, so search ran with no ceiling and semantic search
+    # picked over-budget items (criterion 5: 2/5 every run). Two forms now:
+    #   word before the number:  "less than $40", "max $40", "no more than 40"
+    #   word after the number:   "$40 or less", "$40 max"
     price_match = re.search(
-        r"(?:under|below|at most|up to|<=)\s*\$?\s*(\d+(?:\.\d+)?)",
+        r"(?:\bunder|\bbelow|\bat most|\bup to|<=|\bless than|\bno more than"
+        r"|\bmax(?:imum)?(?:\s+of)?)\s*\$?\s*(\d+(?:\.\d+)?)",
+        lower_text,
+    ) or re.search(
+        r"\$\s*(\d+(?:\.\d+)?)\s*(?:or less|or under|max(?:imum)?)\b",
         lower_text,
     )
     max_price = float(price_match.group(1)) if price_match else None
