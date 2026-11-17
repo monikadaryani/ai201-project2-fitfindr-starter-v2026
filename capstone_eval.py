@@ -129,9 +129,19 @@ def input_tokens(r: dict) -> int:
     return (r.get("prompt_tokens") or 0) + (r.get("embed_tokens") or 0)
 
 
+SEARCH_FAILED = "Search is unavailable"   # agent.py's message when the MCP search call itself fails
+
+
+def search_failed(r: dict) -> bool:
+    """The search never ran (MCP or embedding failure). Not a valid trial for any criterion."""
+    return r["outcome"] == "crashed" or (r.get("error") or "").startswith(SEARCH_FAILED)
+
+
 def stopped_early(r: dict) -> bool:
+    # "Search returned an empty list" — a search that crashed returned nothing at all.
     return (
-        r["n_results"] == 0
+        not search_failed(r)
+        and r["n_results"] == 0
         and not r["outfit_called"]
         and r.get("fit_card") is None
         and bool(r.get("error"))
@@ -222,7 +232,8 @@ def score(runs: dict) -> dict:
         trial = {r["query"]: r for r in runs["c5"] if r["trial"] == t}
         over = {q: (trial[q]["selected_id"], trial[q]["selected_price"]) for q, cap in PRICE_QUERIES
                 if trial[q]["selected_price"] is not None and trial[q]["selected_price"] > cap}
-        held = len(PRICE_QUERIES) - len(over)
+        failed = [q for q, _ in PRICE_QUERIES if search_failed(trial[q])]
+        held = len(PRICE_QUERIES) - len(over) - len(failed)
         ok = held >= C5_TARGET_PER_TRIAL
         all_ok &= ok
         rows.append({"trial": t, "held": held, "over_budget": over, "met": ok,
@@ -240,20 +251,24 @@ def report(label: str, stamp: str, cold: bool, s: dict) -> str:
          f"Run {stamp}. {TRIALS} trials per criterion. Response cache off. "
          f"Listing embeddings were {'COLD (built at start, before any trial)' if cold else 'already cached'}. "
          f"SEMANTIC_MIN_SCORE = {config.SEMANTIC_MIN_SCORE}.", "",
-         "| # | Criterion | Target | Result | Verdict |", "|---|---|---|---|---|"]
+         "| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |", "|---|---|---|---|---|---|"]
     c1 = s["c1"]["rows"]
-    L.append(f"| 1 | paraphrases found | ≥{C1_TARGET_PER_TRIAL}/5 each trial, and total > keyword total | "
-             + ", ".join(f"T{r['trial']}: {r['semantic_hits']}/5" for r in c1)
-             + f"; total {s['c1']['semantic_total']}/15 vs keyword {s['c1']['keyword_total']}/15"
-             + f" | {met(s['c1']['met'])} |")
-    L.append(f"| 2 | impossible queries stop | ≥{C2_TARGET_PER_TRIAL}/5 each trial | "
-             + ", ".join(f"T{r['trial']}: {r['stopped']}/5" for r in s["c2"]["rows"])
+    L.append(f"| 1. Semantic search finds paraphrased items | ≥{C1_TARGET_PER_TRIAL} of 5 each run; "
+             f"3-run total beats keyword | "
+             + " | ".join(f"{r['semantic_hits']}/5 (kw {r['keyword_hits']}/5)" for r in c1)
+             + f" | {met(s['c1']['met'])} ({s['c1']['semantic_total']}/15 vs kw {s['c1']['keyword_total']}/15) |")
+    L.append(f"| 2. Impossible queries stop before suggest_outfit | ≥{C2_TARGET_PER_TRIAL} of 5 each run | "
+             + " | ".join(f"{r['stopped']}/5" for r in s["c2"]["rows"])
              + f" | {met(s['c2']['met'])} |")
-    L.append(f"| 3 | old queries: acceptable item, in budget, fit card | {C3_TARGET}/6 | {s['c3']['passes']}/6 | {met(s['c3']['met'])} |")
-    L.append(f"| 4 | +{C4_EXTRA_CALLS} call, query embedding ≤{C4_MAX_EMBED_TOKENS} tokens | {C4_TARGET}/3 | "
-             f"{s['c4']['passes']}/3 | {met(s['c4']['met'])} |")
-    L.append(f"| 5 | no over-budget pick | {C5_TARGET_PER_TRIAL}/5 each trial | "
-             + ", ".join(f"T{r['trial']}: {r['held']}/5" for r in s["c5"]["rows"])
+    c3_by_run = [sum(r["met"] for r in s["c3"]["rows"] if r["trial"] == t) for t in range(1, TRIALS + 1)]
+    L.append(f"| 3. Queries that already worked still work | 2 of 2 each run ({C3_TARGET} of 6) | "
+             + " | ".join(f"{n}/2" for n in c3_by_run)
+             + f" | {met(s['c3']['met'])} |")
+    L.append(f"| 4. Semantic adds 1 API call, query embedding ≤{C4_MAX_EMBED_TOKENS} tokens | 1 of 1 each run ({C4_TARGET} of 3) | "
+             + " | ".join(f"{int(r['met'])}/1 (+{r['extra_calls']} call, {r['embed_tokens']} tok)" for r in s["c4"]["rows"])
+             + f" | {met(s['c4']['met'])} |")
+    L.append(f"| 5. Never selects an item over the user's price | {C5_TARGET_PER_TRIAL} of 5 each run | "
+             + " | ".join(f"{r['held']}/5" for r in s["c5"]["rows"])
              + f" | {met(s['c5']['met'])} |")
 
     L += ["", "## 1. Paraphrases — selected id (semantic / keyword)", "",
@@ -330,7 +345,22 @@ def cost_runs() -> None:
     print("  the per-token prices for the two models to get dollars, and write down which prices.")
 
 
+def preflight() -> None:
+    """Refuse to run where every search would fail — before 70 runs say so one by one."""
+    import sys
+    try:
+        import mcp  # noqa: F401
+    except ImportError:
+        sys.exit(
+            f"This Python can't import 'mcp', so every search would fail.\n"
+            f"  Python in use: {sys.executable}\n"
+            f"Activate the project environment first:\n"
+            f"  conda deactivate; source .venv/bin/activate; which python"
+        )
+
+
 def main() -> None:
+    preflight()
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     parser.add_argument("--label", help="before / after — names the results files")
     parser.add_argument("--cost", action="store_true", help=f"the {COST_RUNS}-run cost measurement")
